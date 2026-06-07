@@ -12,7 +12,7 @@
 
 1. 克隆仓库：
    ```bash
-   git clone https://github.com/GuYaQing/nexus-terminal.git
+   git clone https://github.com/Quitintmian/nexus-terminal.git
    ```
 2. 用浏览器打开 `index.html` 即可使用，无需安装任何依赖或启动服务器。
 
