@@ -1,0 +1,3442 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXUS Terminal v4.0</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500;600;700&family=Orbitron:wght@400;700;900&display=swap');
+
+  :root {
+    --green: #00ff9f;
+    --green-dim: #00cc7f;
+    --green-dark: #004d30;
+    --cyan: #00e5ff;
+    --amber: #ffb300;
+    --red: #ff3d5a;
+    --purple: #c77dff;
+    --bg: #0a0e14;
+    --bg-light: #111820;
+    --glow: 0 0 10px rgba(0, 255, 159, 0.3), 0 0 40px rgba(0, 255, 159, 0.1);
+    --glow-strong: 0 0 10px rgba(0, 255, 159, 0.5), 0 0 40px rgba(0, 255, 159, 0.2), 0 0 80px rgba(0, 255, 159, 0.1);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--green);
+    font-family: 'Fira Code', monospace;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #matrix-bg {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 0;
+    opacity: 0.06;
+  }
+
+  .terminal-wrapper {
+    position: relative;
+    z-index: 1;
+    width: 95vw;
+    max-width: 1200px;
+    height: 90vh;
+    border: 1px solid rgba(0, 255, 159, 0.2);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: var(--glow-strong), inset 0 0 60px rgba(0, 255, 159, 0.03);
+    background: linear-gradient(180deg, rgba(10, 14, 20, 0.98), rgba(6, 10, 16, 0.99));
+  }
+
+  .title-bar {
+    background: linear-gradient(90deg, rgba(0, 255, 159, 0.1), rgba(0, 229, 255, 0.05));
+    border-bottom: 1px solid rgba(0, 255, 159, 0.15);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    user-select: none;
+    -webkit-app-region: drag;
+  }
+
+  .title-bar .dots { display: flex; gap: 7px; }
+
+  .title-bar .dot {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+  }
+
+  .title-bar .dot:hover { transform: scale(1.2); }
+  .title-bar .dot.red { background: #ff5f57; box-shadow: 0 0 6px rgba(255, 95, 87, 0.5); }
+  .title-bar .dot.yellow { background: #ffbd2e; box-shadow: 0 0 6px rgba(255, 189, 46, 0.5); }
+  .title-bar .dot.green { background: #28c840; box-shadow: 0 0 6px rgba(40, 200, 64, 0.5); }
+
+  .title-bar .title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--green-dim);
+    text-transform: uppercase;
+    flex: 1;
+    text-align: center;
+    text-shadow: 0 0 10px rgba(0, 255, 159, 0.3);
+  }
+
+  .title-bar .status {
+    font-size: 10px;
+    color: var(--green-dark);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .title-bar .status .pulse {
+    width: 6px; height: 6px;
+    background: var(--green);
+    border-radius: 50%;
+    animation: pulse 2s ease-in-out infinite;
+    box-shadow: 0 0 6px var(--green);
+  }
+
+  .title-bar .edit-indicator {
+    font-size: 10px;
+    color: var(--purple);
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-shadow: 0 0 8px rgba(199, 125, 255, 0.5);
+    display: none;
+  }
+
+  .title-bar .edit-indicator.active { display: inline; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .terminal-body {
+    height: calc(100% - 42px);
+    overflow-y: auto;
+    padding: 20px;
+    position: relative;
+    scroll-behavior: smooth;
+  }
+
+  .terminal-body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 255, 159, 0.015) 2px,
+      rgba(0, 255, 159, 0.015) 4px
+    );
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  .terminal-body::after {
+    content: '';
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0, 255, 159, 0.01);
+    pointer-events: none;
+    z-index: 99;
+    animation: flicker 0.15s infinite;
+  }
+
+  @keyframes flicker {
+    0% { opacity: 0.27; }
+    5% { opacity: 0.34; }
+    10% { opacity: 0.28; }
+    20% { opacity: 0.35; }
+    40% { opacity: 0.29; }
+    50% { opacity: 0.33; }
+    60% { opacity: 0.27; }
+    80% { opacity: 0.31; }
+    100% { opacity: 0.27; }
+  }
+
+  .terminal-body::-webkit-scrollbar { width: 6px; }
+  .terminal-body::-webkit-scrollbar-track { background: transparent; }
+  .terminal-body::-webkit-scrollbar-thumb {
+    background: rgba(0, 255, 159, 0.2);
+    border-radius: 3px;
+  }
+  .terminal-body::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 255, 159, 0.4);
+  }
+
+  .output-line {
+    margin-bottom: 2px;
+    line-height: 1.6;
+    font-size: 14px;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  .output-line.command { color: var(--green); }
+  .output-line.result { color: rgba(0, 255, 159, 0.7); }
+  .output-line.error { color: var(--red); text-shadow: 0 0 8px rgba(255, 61, 90, 0.3); }
+  .output-line.info { color: var(--cyan); text-shadow: 0 0 8px rgba(0, 229, 255, 0.2); }
+  .output-line.warning { color: var(--amber); text-shadow: 0 0 8px rgba(255, 179, 0, 0.2); }
+  .output-line.system { color: var(--purple); text-shadow: 0 0 8px rgba(199, 125, 255, 0.2); }
+  .output-line.ascii { color: var(--green); text-shadow: 0 0 8px rgba(0, 255, 159, 0.4); line-height: 1.2; }
+  .output-line.dim { color: var(--green-dark); }
+  .output-line.ai { color: var(--purple); text-shadow: 0 0 8px rgba(199, 125, 255, 0.3); }
+  .output-line.git { color: var(--amber); text-shadow: 0 0 8px rgba(255, 179, 0, 0.2); }
+
+  .input-line {
+    display: flex;
+    align-items: center;
+    margin-top: 2px;
+    line-height: 1.6;
+    font-size: 14px;
+  }
+
+  .prompt {
+    color: var(--cyan);
+    text-shadow: 0 0 8px rgba(0, 229, 255, 0.3);
+    white-space: nowrap;
+    margin-right: 8px;
+    font-weight: 500;
+  }
+
+  .prompt .user { color: var(--amber); text-shadow: 0 0 8px rgba(255, 179, 0, 0.3); }
+  .prompt .at { color: var(--green-dark); }
+  .prompt .host { color: var(--cyan); }
+  .prompt .colon { color: var(--green-dark); }
+  .prompt .path { color: var(--green); font-weight: 600; }
+  .prompt .symbol { color: var(--green); text-shadow: 0 0 8px rgba(0, 255, 159, 0.4); }
+  .prompt .git-branch { color: var(--purple); font-size: 12px; margin-right: 4px; }
+
+  #command-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--green);
+    font-family: 'Fira Code', monospace;
+    font-size: 14px;
+    caret-color: var(--green);
+    text-shadow: 0 0 5px rgba(0, 255, 159, 0.3);
+  }
+
+  #command-input::selection {
+    background: rgba(0, 255, 159, 0.2);
+  }
+
+  #boot-screen {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: var(--bg);
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 40px;
+  }
+
+  #boot-screen .boot-logo {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 48px;
+    font-weight: 900;
+    color: var(--green);
+    text-shadow: 0 0 20px rgba(0, 255, 159, 0.5), 0 0 60px rgba(0, 255, 159, 0.2);
+    letter-spacing: 8px;
+    margin-bottom: 30px;
+    animation: logoGlow 2s ease-in-out infinite alternate;
+  }
+
+  @keyframes logoGlow {
+    from { text-shadow: 0 0 20px rgba(0, 255, 159, 0.5), 0 0 60px rgba(0, 255, 159, 0.2); }
+    to { text-shadow: 0 0 30px rgba(0, 255, 159, 0.7), 0 0 80px rgba(0, 255, 159, 0.3), 0 0 120px rgba(0, 255, 159, 0.1); }
+  }
+
+  #boot-screen .boot-text {
+    font-size: 13px;
+    color: var(--green-dim);
+    text-align: left;
+    width: 100%;
+    max-width: 600px;
+    line-height: 1.8;
+  }
+
+  #boot-screen .boot-text .line {
+    opacity: 0;
+    transform: translateY(5px);
+    transition: all 0.3s ease;
+  }
+
+  #boot-screen .boot-text .line.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  #boot-screen .progress-bar {
+    width: 100%;
+    max-width: 600px;
+    height: 2px;
+    background: var(--green-dark);
+    margin-top: 20px;
+    border-radius: 1px;
+    overflow: hidden;
+  }
+
+  #boot-screen .progress-bar .fill {
+    height: 100%;
+    width: 0%;
+    background: var(--green);
+    box-shadow: 0 0 10px var(--green);
+    transition: width 0.3s ease;
+  }
+
+  .autocomplete {
+    position: absolute;
+    background: rgba(10, 14, 20, 0.95);
+    border: 1px solid rgba(0, 255, 159, 0.2);
+    border-radius: 6px;
+    padding: 4px 0;
+    min-width: 200px;
+    z-index: 200;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), var(--glow);
+    display: none;
+  }
+
+  .autocomplete .item {
+    padding: 6px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    color: var(--green-dim);
+    transition: all 0.15s;
+  }
+
+  .autocomplete .item:hover,
+  .autocomplete .item.selected {
+    background: rgba(0, 255, 159, 0.1);
+    color: var(--green);
+  }
+
+  .autocomplete .item .cmd-name { font-weight: 600; }
+  .autocomplete .item .cmd-desc {
+    color: var(--green-dark);
+    margin-left: 12px;
+    font-size: 11px;
+  }
+
+  @keyframes glitch {
+    0% { transform: translate(0); }
+    20% { transform: translate(-2px, 2px); }
+    40% { transform: translate(-2px, -2px); }
+    60% { transform: translate(2px, 2px); }
+    80% { transform: translate(2px, -2px); }
+    100% { transform: translate(0); }
+  }
+
+  .glitch { animation: glitch 0.3s ease; }
+
+  .table-output {
+    border-collapse: collapse;
+    margin: 8px 0;
+  }
+
+  .table-output th {
+    color: var(--cyan);
+    text-align: left;
+    padding: 4px 16px 4px 0;
+    border-bottom: 1px solid rgba(0, 229, 255, 0.2);
+    font-weight: 600;
+    font-size: 13px;
+  }
+
+  .table-output td {
+    padding: 3px 16px 3px 0;
+    color: rgba(0, 255, 159, 0.7);
+    font-size: 13px;
+  }
+
+  .inline-progress {
+    display: inline-block;
+    width: 200px;
+    height: 8px;
+    background: var(--green-dark);
+    border-radius: 4px;
+    overflow: hidden;
+    vertical-align: middle;
+  }
+
+  .inline-progress .bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--green), var(--cyan));
+    border-radius: 4px;
+    box-shadow: 0 0 8px rgba(0, 255, 159, 0.4);
+    transition: width 0.5s ease;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="matrix-bg"></canvas>
+
+<div class="terminal-wrapper">
+  <div class="title-bar">
+    <div class="dots">
+      <div class="dot red" title="关闭"></div>
+      <div class="dot yellow" title="最小化"></div>
+      <div class="dot green" title="最大化"></div>
+    </div>
+    <div class="title">NEXUS Terminal v4.0</div>
+    <span class="edit-indicator" id="edit-indicator">EDIT</span>
+    <div class="status">
+      <div class="pulse"></div>
+      <span>SECURE</span>
+    </div>
+  </div>
+
+  <div class="terminal-body" id="terminal">
+    <div id="boot-screen">
+      <div class="boot-logo">NEXUS</div>
+      <div class="boot-text" id="boot-text"></div>
+      <div class="progress-bar"><div class="fill" id="boot-progress"></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="autocomplete" id="autocomplete"></div>
+
+<script>
+// ═══════════════════════════════════════════
+// NEXUS Terminal v4.0 - 高级模拟命令行工具
+// ═══════════════════════════════════════════
+
+const terminal = document.getElementById('terminal');
+const bootScreen = document.getElementById('boot-screen');
+const bootText = document.getElementById('boot-text');
+const bootProgress = document.getElementById('boot-progress');
+const autocomplete = document.getElementById('autocomplete');
+const editIndicator = document.getElementById('edit-indicator');
+
+let commandHistory = [];
+let historyIndex = -1;
+let currentDir = '~';
+let inputEl = null;
+let isBooted = false;
+
+// 编辑器模式
+let editMode = false;
+let editFile = '';
+let editLines = [];
+let editLineNum = 0;
+
+// 管道捕获
+let captureBuffer = null;
+
+// AI 对话历史
+let aiConversationHistory = [];
+
+// 别名系统
+let aliases = {};
+
+// Git 状态
+let gitState = {
+  initialized: false,
+  staged: [],
+  commits: [],
+  branch: 'main',
+  branches: ['main']
+};
+
+let env = {
+  USER: 'nexus',
+  HOST: 'sys0',
+  HOME: '~',
+  SHELL: '/bin/nexus',
+  LANG: 'zh_CN.UTF-8',
+  TERM: 'xterm-256color',
+  PATH: '/usr/local/bin:/usr/bin:/bin',
+  EDITOR: 'vim',
+  PS1: '\\u@\\h:\\w$ '
+};
+
+// 文件系统（默认初始值）
+const defaultFileSystem = {
+  '~': {
+    type: 'dir',
+    children: {
+      'documents': {
+        type: 'dir',
+        children: {
+          'notes.txt': { type: 'file', content: '项目笔记：\n1. 完成 NEXUS Terminal 核心模块\n2. 优化 CRT 渲染效果\n3. 添加更多交互命令' },
+          'todo.md': { type: 'file', content: '# TODO\n- [x] 基础命令系统\n- [x] 文件系统模拟\n- [ ] 网络模拟\n- [ ] 进程管理' },
+          'report.csv': { type: 'file', content: '日期,项目,状态,进度\n2026-01-15,NEXUS,进行中,75%\n2026-02-01,CORE,已完成,100%\n2026-03-10,MESH,规划中,10%' }
+        }
+      },
+      'projects': {
+        type: 'dir',
+        children: {
+          'nexus': {
+            type: 'dir',
+            children: {
+              'README.md': { type: 'file', content: '# NEXUS Terminal\n高级模拟终端系统 v4.0\n\n## 特性\n- CRT 视觉效果\n- 完整文件系统\n- 命令自动补全\n- 历史记录导航\n- AI 对话模拟\n- Git 版本控制\n- 管道与重定向' },
+              'config.json': { type: 'file', content: '{\n  "theme": "cyberpunk",\n  "font": "Fira Code",\n  "glow": true,\n  "scanlines": true,\n  "fps": 60\n}' },
+              'main.py': { type: 'file', content: 'import nexus.core as core\n\ndef main():\n    """NEXUS Terminal 主入口"""\n    terminal = core.Terminal()\n    terminal.boot()\n    terminal.run()\n\nif __name__ == "__main__":\n    main()' }
+            }
+          },
+          'mesh': {
+            type: 'dir',
+            children: {
+              'mesh.js': { type: 'file', content: '// Mesh Network Module\nclass MeshNode {\n  constructor(id, addr) {\n    this.id = id;\n    this.addr = addr;\n    this.peers = [];\n  }\n  connect(peer) {\n    this.peers.push(peer);\n  }\n}' }
+            }
+          }
+        }
+      },
+      '.bashrc': { type: 'file', content: '# NEXUS Shell 配置\nexport PS1="\\u@\\h:\\w$ "\nexport EDITOR=vim\nalias ll="ls -la"\nalias cls="clear"' },
+      '.gitconfig': { type: 'file', content: '[user]\n  name = Nexus User\n  email = nexus@sys0.local\n[core]\n  editor = vim\n[color]\n  ui = auto' }
+    }
+  }
+};
+
+let fileSystem = JSON.parse(JSON.stringify(defaultFileSystem));
+
+// ═══════════════════════════════════════════
+// localStorage 持久化
+// ═══════════════════════════════════════════
+
+const STORAGE_KEY = 'nexus_terminal_state';
+
+function saveState() {
+  try {
+    const state = {
+      fileSystem: fileSystem,
+      commandHistory: commandHistory,
+      env: env,
+      aliases: aliases,
+      gitState: gitState,
+      currentDir: currentDir
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (e) {
+    // localStorage 可能不可用或已满
+  }
+}
+
+function loadState() {
+  try {
+    const data = localStorage.getItem(STORAGE_KEY);
+    if (data) {
+      const state = JSON.parse(data);
+      if (state.fileSystem) fileSystem = state.fileSystem;
+      if (state.commandHistory) commandHistory = state.commandHistory;
+      if (state.env) env = { ...env, ...state.env };
+      if (state.aliases) aliases = state.aliases;
+      if (state.gitState) gitState = { ...gitState, ...state.gitState };
+      if (state.currentDir) currentDir = state.currentDir;
+      historyIndex = commandHistory.length;
+      return true;
+    }
+  } catch (e) {
+    // 解析失败
+  }
+  return false;
+}
+
+function clearState() {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch (e) {}
+}
+
+// ═══════════════════════════════════════════
+// 启动序列
+// ═══════════════════════════════════════════
+
+const bootSequence = [
+  { text: '[BIOS] POST 检查通过...', delay: 200 },
+  { text: '[BIOS] 内存检测: 32768 MB OK', delay: 300 },
+  { text: '[KERNEL] 加载 NEXUS Kernel 6.1.0-nexus...', delay: 400 },
+  { text: '[KERNEL] 初始化 CPU 调度器...', delay: 200 },
+  { text: '[KERNEL] 挂载根文件系统...', delay: 300 },
+  { text: '[NET] 启动网络接口 eth0...', delay: 250 },
+  { text: '[NET] IP 地址: 10.0.13.37/24', delay: 200 },
+  { text: '[SEC] 加载安全模块 [AES-256]...', delay: 300 },
+  { text: '[SEC] 防火墙规则已应用 (42 条)', delay: 200 },
+  { text: '[SYS] 启动系统服务...', delay: 400 },
+  { text: '[SYS]   ✓ cron     ✓ dbus     ✓ network', delay: 300 },
+  { text: '[SYS]   ✓ sshd     ✓ syslog   ✓ nginx', delay: 250 },
+  { text: '[NEXUS] 终端服务就绪', delay: 300 },
+  { text: '', delay: 200 },
+  { text: '>>> 系统启动完成 <<<', delay: 0 }
+];
+
+async function boot() {
+  // 尝试从 localStorage 恢复状态
+  let restored = false;
+  try {
+    restored = loadState();
+  } catch (e) {
+    console.warn('loadState 失败:', e);
+  }
+
+  try {
+    for (let i = 0; i < bootSequence.length; i++) {
+      const step = bootSequence[i];
+      const line = document.createElement('div');
+      line.className = 'line';
+      if (step.text.includes('✓')) {
+        line.style.color = 'var(--green-dim)';
+      } else if (step.text.includes('>>>')) {
+        line.style.color = 'var(--cyan)';
+        line.style.fontWeight = '600';
+        line.style.textShadow = '0 0 10px rgba(0, 229, 255, 0.4)';
+      } else if (step.text.includes('[SEC]')) {
+        line.style.color = 'var(--amber)';
+      }
+      line.textContent = step.text;
+      bootText.appendChild(line);
+
+      await sleep(50);
+      line.classList.add('visible');
+      bootProgress.style.width = `${((i + 1) / bootSequence.length) * 100}%`;
+
+      if (step.delay) await sleep(step.delay);
+    }
+
+    await sleep(600);
+    bootScreen.style.transition = 'opacity 0.5s ease';
+    bootScreen.style.opacity = '0';
+    await sleep(500);
+    bootScreen.remove();
+  } catch (e) {
+    // 启动动画出错时强制移除 boot-screen
+    console.warn('boot 动画异常:', e);
+    const bs = document.getElementById('boot-screen');
+    if (bs) bs.remove();
+  }
+
+  isBooted = true;
+
+  try {
+    showWelcome();
+    if (restored) {
+      addOutput('  [已从本地存储恢复会话状态]', 'system');
+      addOutput('');
+    }
+  } catch (e) {
+    console.warn('showWelcome 异常:', e);
+  }
+
+  // 确保 createInputLine 始终被调用
+  try {
+    createInputLine();
+  } catch (e) {
+    console.warn('createInputLine 异常:', e);
+    // 终极兜底：强制创建最小可用输入行
+    try {
+      terminal.innerHTML += '<div class="input-line"><span class="prompt"><span class="user">nexus</span><span class="at">@</span><span class="host">terminal</span><span class="colon">:</span><span class="path">~</span><span class="symbol">$ </span></span><input id="command-input" type="text" autocomplete="off" spellcheck="false"></div>';
+      inputEl = document.getElementById('command-input');
+      if (inputEl) {
+        inputEl.addEventListener('keydown', handleKeyDown);
+        inputEl.addEventListener('input', handleInput);
+        inputEl.focus();
+      }
+    } catch (e2) {
+      console.error('兜底输入行创建失败:', e2);
+    }
+  }
+
+  // 安全网：延迟检查输入行是否存在
+  setTimeout(() => {
+    if (!inputEl || !document.getElementById('command-input')) {
+      console.warn('输入行丢失，重新创建');
+      createInputLine();
+    }
+  }, 200);
+}
+
+function showWelcome() {
+  const ascii = `
+  ███╗   ██╗███████╗██╗  ██╗██╗   ██╗███████╗
+  ████╗  ██║██╔════╝╚██╗██╔╝██║   ██║██╔════╝
+  ██╔██╗ ██║█████╗   ╚███╔╝ ██║   ██║███████╗
+  ██║╚██╗██║██╔══╝   ██╔██╗ ██║   ██║╚════██║
+  ██║ ╚████║███████╗██╔╝ ╚██╗╚██████╔╝███████║
+  ╚═╝  ╚═══╝╚══════╝╚═╝   ╚═╝ ╚═════╝ ╚══════╝`;
+
+  addOutput(ascii, 'ascii');
+  addOutput('');
+  addOutput('  NEXUS Terminal v4.0 | 高级模拟命令行工具', 'info');
+  addOutput('  输入 help 查看可用命令 | Tab 自动补全 | ↑↓ 浏览历史', 'dim');
+  addOutput('  支持: 管道(|) 重定向(> >>) AI对话 Git模拟 文件编辑', 'dim');
+  addOutput('');
+}
+
+// ═══════════════════════════════════════════
+// 核心函数
+// ═══════════════════════════════════════════
+
+function addOutput(text, type = 'result') {
+  // 管道捕获模式
+  if (captureBuffer !== null) {
+    captureBuffer.push(text);
+    return;
+  }
+  const line = document.createElement('div');
+  line.className = `output-line ${type}`;
+  line.textContent = text;
+  terminal.appendChild(line);
+  scrollToBottom();
+}
+
+function addOutputHTML(html, type = 'result') {
+  if (captureBuffer !== null) {
+    // 捕获模式下提取纯文本
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    captureBuffer.push(tmp.textContent || tmp.innerText);
+    return;
+  }
+  const line = document.createElement('div');
+  line.className = `output-line ${type}`;
+  line.innerHTML = html;
+  terminal.appendChild(line);
+  scrollToBottom();
+}
+
+function scrollToBottom() {
+  terminal.scrollTop = terminal.scrollHeight;
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function createInputLine() {
+  // 移除可能残留的旧输入框（防止 id 重复）
+  const oldInput = document.getElementById('command-input');
+  if (oldInput) oldInput.removeAttribute('id');
+
+  const line = document.createElement('div');
+  line.className = 'input-line';
+
+  const prompt = document.createElement('span');
+  prompt.className = 'prompt';
+
+  let gitBranch = '';
+  if (gitState.initialized) {
+    gitBranch = `<span class="git-branch"> (${gitState.branch})</span>`;
+  }
+
+  prompt.innerHTML = `<span class="user">${env.USER}</span><span class="at">@</span><span class="host">${env.HOST}</span><span class="colon">:</span><span class="path">${currentDir}</span>${gitBranch}<span class="symbol">$ </span>`;
+
+  const input = document.createElement('input');
+  input.id = 'command-input';
+  input.type = 'text';
+  input.autocomplete = 'off';
+  input.spellcheck = false;
+
+  line.appendChild(prompt);
+  line.appendChild(input);
+  terminal.appendChild(line);
+
+  inputEl = input;
+
+  // 使用 requestAnimationFrame 确保浏览器完成布局后再聚焦
+  requestAnimationFrame(() => {
+    input.focus();
+    scrollToBottom();
+  });
+
+  input.addEventListener('keydown', handleKeyDown);
+  input.addEventListener('input', handleInput);
+}
+
+async function handleKeyDown(e) {
+  // 编辑器模式
+  if (editMode) {
+    handleEditKeyDown(e);
+    return;
+  }
+
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const cmd = inputEl.value;
+    hideAutocomplete();
+
+    const inputLine = inputEl.closest('.input-line');
+    const promptHTML = inputLine.querySelector('.prompt').innerHTML;
+    inputLine.innerHTML = `<span class="prompt">${promptHTML}</span><span style="color: var(--green); text-shadow: 0 0 5px rgba(0,255,159,0.3);">${escapeHTML(cmd)}</span>`;
+    inputLine.className = 'output-line command';
+
+    if (cmd.trim()) {
+      commandHistory.push(cmd);
+      historyIndex = commandHistory.length;
+      inputEl = null; // 防止异步命令期间 inputEl 引用混乱
+      try {
+        await processCommand(cmd.trim());
+      } catch (e) {
+        addOutput('命令执行错误: ' + (e.message || e), 'error');
+      }
+      saveState();
+    }
+
+    // 仅在输入行不存在时创建（reboot/clear 等命令可能已内部创建）
+    if (!document.getElementById('command-input')) {
+      createInputLine();
+    }
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (historyIndex > 0) {
+      historyIndex--;
+      inputEl.value = commandHistory[historyIndex];
+    }
+  } else if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (historyIndex < commandHistory.length - 1) {
+      historyIndex++;
+      inputEl.value = commandHistory[historyIndex];
+    } else {
+      historyIndex = commandHistory.length;
+      inputEl.value = '';
+    }
+  } else if (e.key === 'Tab') {
+    e.preventDefault();
+    handleTabComplete();
+  } else if (e.key === 'l' && e.ctrlKey) {
+    e.preventDefault();
+    clearTerminal();
+  } else if (e.key === 'c' && e.ctrlKey) {
+    e.preventDefault();
+    const inputLine = inputEl.closest('.input-line');
+    const promptHTML = inputLine.querySelector('.prompt').innerHTML;
+    inputLine.innerHTML = `<span class="prompt">${promptHTML}</span><span style="color: var(--green);">${escapeHTML(inputEl.value)}</span><span style="color: var(--red);">^C</span>`;
+    inputLine.className = 'output-line command';
+    createInputLine();
+  }
+}
+
+function handleInput() {
+  if (editMode) return;
+  if (inputEl.value.length > 0) {
+    showAutocomplete(inputEl.value);
+  } else {
+    hideAutocomplete();
+  }
+}
+
+function escapeHTML(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ═══════════════════════════════════════════
+// 编辑器模式
+// ═══════════════════════════════════════════
+
+function enterEditMode(fileName) {
+  const file = getFile(fileName);
+  editFile = fileName;
+  if (file && file.type === 'file') {
+    editLines = file.content ? file.content.split('\n') : [''];
+  } else {
+    editLines = [''];
+  }
+  editLineNum = 0;
+  editMode = true;
+  editIndicator.classList.add('active');
+
+  addOutput(`[编辑器] 正在编辑: ${fileName}`, 'system');
+  addOutput('[编辑器] 逐行输入内容，输入 :wq 保存退出，:q 放弃退出', 'system');
+  addOutput('');
+
+  renderEditPrompt();
+}
+
+function renderEditPrompt() {
+  const line = document.createElement('div');
+  line.className = 'input-line';
+
+  const prompt = document.createElement('span');
+  prompt.className = 'prompt';
+  prompt.innerHTML = `<span style="color:var(--purple)">${String(editLineNum + 1).padStart(3)} |</span> `;
+
+  const input = document.createElement('input');
+  input.id = 'command-input';
+  input.type = 'text';
+  input.autocomplete = 'off';
+  input.spellcheck = false;
+  if (editLines[editLineNum] !== undefined) {
+    input.value = editLines[editLineNum];
+  }
+
+  line.appendChild(prompt);
+  line.appendChild(input);
+  terminal.appendChild(line);
+
+  inputEl = input;
+  input.focus();
+  input.addEventListener('keydown', handleKeyDown);
+}
+
+function handleEditKeyDown(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const val = inputEl.value;
+
+    // 检查退出命令
+    if (val.trim() === ':wq') {
+      // 保存并退出
+      const inputLine = inputEl.closest('.input-line');
+      inputLine.innerHTML = `<span style="color:var(--purple)">  ${String(editLineNum + 1).padStart(3)} |</span> <span style="color:var(--cyan)">:wq</span>`;
+      inputLine.className = 'output-line';
+
+      // 写入文件
+      const dir = resolveDir(currentDir);
+      if (dir.children[editFile]) {
+        dir.children[editFile].content = editLines.join('\n');
+      } else {
+        dir.children[editFile] = { type: 'file', content: editLines.join('\n') };
+      }
+      addOutput(`[编辑器] 已保存: ${editFile} (${editLines.length} 行)`, 'system');
+      editMode = false;
+      editIndicator.classList.remove('active');
+      saveState();
+      createInputLine();
+      return;
+    }
+
+    if (val.trim() === ':q') {
+      // 放弃退出
+      const inputLine = inputEl.closest('.input-line');
+      inputLine.innerHTML = `<span style="color:var(--purple)">  ${String(editLineNum + 1).padStart(3)} |</span> <span style="color:var(--red)">:q</span>`;
+      inputLine.className = 'output-line';
+
+      addOutput('[编辑器] 已放弃修改', 'warning');
+      editMode = false;
+      editIndicator.classList.remove('active');
+      createInputLine();
+      return;
+    }
+
+    // 记录当前行
+    editLines[editLineNum] = val;
+    editLineNum++;
+
+    // 确保数组足够长
+    while (editLines.length <= editLineNum) {
+      editLines.push('');
+    }
+
+    // 将当前输入行变为静态
+    const inputLine = inputEl.closest('.input-line');
+    inputLine.innerHTML = `<span style="color:var(--purple)">${String(editLineNum).padStart(3)} |</span> <span style="color:var(--green-dim)">${escapeHTML(val)}</span>`;
+    inputLine.className = 'output-line';
+
+    renderEditPrompt();
+  }
+}
+
+// ═══════════════════════════════════════════
+// 自动补全
+// ═══════════════════════════════════════════
+
+const commands = {
+  help: '显示帮助信息',
+  clear: '清空终端',
+  echo: '输出文本',
+  date: '显示日期时间',
+  whoami: '显示当前用户',
+  hostname: '显示主机名',
+  pwd: '显示当前目录',
+  ls: '列出目录内容',
+  cd: '切换目录',
+  cat: '查看文件内容',
+  mkdir: '创建目录',
+  touch: '创建文件',
+  rm: '删除文件或目录',
+  tree: '显示目录树',
+  env: '显示环境变量',
+  export: '设置环境变量',
+  history: '显示命令历史',
+  uname: '显示系统信息',
+  uptime: '显示运行时间',
+  ps: '显示进程列表',
+  top: '显示系统资源',
+  ping: '网络连通测试',
+  ifconfig: '显示网络配置',
+  curl: '模拟 HTTP 请求',
+  ssh: '模拟 SSH 连接',
+  neofetch: '显示系统概况',
+  matrix: '矩阵雨效果',
+  weather: '查看天气',
+  calc: '计算器',
+  cowsay: '牛说',
+  fortune: '随机格言',
+  color: '切换主题色',
+  reboot: '重启终端',
+  exit: '退出终端',
+  // 新增命令
+  ai: 'AI 对话模拟',
+  write: '写入文件',
+  append: '追加到文件',
+  edit: '编辑文件',
+  grep: '搜索文件内容',
+  wc: '统计文件信息',
+  find: '查找文件',
+  alias: '设置命令别名',
+  unalias: '删除别名',
+  head: '显示文件头部',
+  tail: '显示文件尾部',
+  diff: '比较文件差异',
+  chmod: '修改文件权限',
+  man: '命令手册',
+  git: 'Git 版本控制',
+  save: '保存会话状态',
+  load: '加载会话状态',
+  reset: '清除本地数据并重置终端'
+};
+
+function showAutocomplete(partial) {
+  const parts = partial.split(' ');
+  const cmdPart = parts[0].toLowerCase();
+  const matches = Object.keys(commands).filter(c => c.startsWith(cmdPart));
+
+  if (matches.length === 0 || (parts.length > 1)) {
+    hideAutocomplete();
+    return;
+  }
+
+  autocomplete.innerHTML = '';
+  matches.forEach((cmd, i) => {
+    const item = document.createElement('div');
+    item.className = 'item' + (i === 0 ? ' selected' : '');
+    item.innerHTML = `<span class="cmd-name">${cmd}</span><span class="cmd-desc">${commands[cmd]}</span>`;
+    item.addEventListener('click', () => {
+      inputEl.value = cmd + ' ';
+      hideAutocomplete();
+      inputEl.focus();
+    });
+    autocomplete.appendChild(item);
+  });
+
+  const inputRect = inputEl.getBoundingClientRect();
+  autocomplete.style.left = inputRect.left + 'px';
+  autocomplete.style.top = (inputRect.bottom + 4) + 'px';
+  autocomplete.style.display = 'block';
+}
+
+function hideAutocomplete() {
+  autocomplete.style.display = 'none';
+}
+
+function handleTabComplete() {
+  const partial = inputEl.value.split(' ');
+  const cmdPart = partial[0].toLowerCase();
+
+  if (partial.length === 1) {
+    const matches = Object.keys(commands).filter(c => c.startsWith(cmdPart));
+    if (matches.length === 1) {
+      inputEl.value = matches[0] + ' ';
+      hideAutocomplete();
+    } else if (matches.length > 1) {
+      addOutput(matches.join('  '), 'dim');
+    }
+  } else if (partial.length === 2 && ['cd', 'ls', 'cat', 'rm', 'tree', 'edit', 'head', 'tail', 'grep', 'wc', 'chmod', 'diff'].includes(cmdPart)) {
+    const dir = resolveDir(currentDir);
+    if (dir && dir.children) {
+      const filePart = partial[1].toLowerCase();
+      const matches = Object.keys(dir.children).filter(c => c.startsWith(filePart));
+      if (matches.length === 1) {
+        inputEl.value = `${cmdPart} ${matches[0]}`;
+        hideAutocomplete();
+      } else if (matches.length > 1) {
+        addOutput(matches.join('  '), 'dim');
+      }
+    }
+  }
+}
+
+// ═══════════════════════════════════════════
+// 文件系统操作
+// ═══════════════════════════════════════════
+
+function resolveDir(path) {
+  if (path === '~') return fileSystem['~'];
+  const parts = path.replace('~/', '').replace('~', '').split('/').filter(Boolean);
+  let current = fileSystem['~'];
+  for (const part of parts) {
+    if (current && current.children && current.children[part] && current.children[part].type === 'dir') {
+      current = current.children[part];
+    } else {
+      return null;
+    }
+  }
+  return current;
+}
+
+function resolvePath(path) {
+  if (path.startsWith('~/')) path = path;
+  else if (path.startsWith('/')) path = '~' + path;
+  else if (path === '~') path = '~';
+  else path = currentDir === '~' ? `~/${path}` : `${currentDir}/${path}`;
+
+  const parts = path.split('/').filter(Boolean);
+  const resolved = [];
+  for (const part of parts) {
+    if (part === '..') resolved.pop();
+    else if (part !== '.') resolved.push(part);
+  }
+  return resolved.join('/') || '~';
+}
+
+function getFile(path) {
+  const fullPath = resolvePath(path);
+  const parts = fullPath.split('/').filter(Boolean);
+  const fileName = parts.pop();
+  const dirPath = parts.join('/') || '~';
+
+  if (fileName === '' || fullPath === '~') return resolveDir('~');
+
+  const dir = resolveDir(dirPath);
+  if (dir && dir.children && dir.children[fileName]) {
+    return dir.children[fileName];
+  }
+  return null;
+}
+
+function getParentDirAndName(path) {
+  const fullPath = resolvePath(path);
+  const parts = fullPath.split('/').filter(Boolean);
+  const fileName = parts.pop();
+  const dirPath = parts.join('/') || '~';
+  const dir = resolveDir(dirPath);
+  return { dir, fileName, dirPath };
+}
+
+// ═══════════════════════════════════════════
+// 管道与重定向
+// ═══════════════════════════════════════════
+
+async function executeCaptured(cmdStr, stdin = '') {
+  captureBuffer = [];
+  try {
+    await processCommandDirect(cmdStr, stdin);
+  } catch (e) {
+    captureBuffer.push('错误: ' + (e.message || e));
+  }
+  const output = captureBuffer.join('\n');
+  captureBuffer = null;
+  return output;
+}
+
+async function processCommand(input) {
+  // 别名替换
+  const firstWord = input.split(/\s+/)[0];
+  if (aliases[firstWord]) {
+    input = aliases[firstWord] + input.substring(firstWord.length);
+  }
+
+  // 检查管道（不能简单用 includes，因为引号内可能有 |）
+  const pipeSegments = splitPipes(input);
+
+  if (pipeSegments.length > 1) {
+    let pipeData = '';
+    for (const seg of pipeSegments) {
+      pipeData = await executeCaptured(seg.trim(), pipeData);
+    }
+    addOutput(pipeData, 'result');
+    return;
+  }
+
+  // 检查重定向
+  let redirectFile = null;
+  let appendMode = false;
+  let commandPart = input;
+
+  const appendIdx = findRedirect(input, '>>');
+  const overwriteIdx = appendIdx === -1 ? findRedirect(input, '>') : -1;
+
+  if (appendIdx !== -1) {
+    commandPart = input.substring(0, appendIdx).trim();
+    redirectFile = input.substring(appendIdx + 2).trim();
+    appendMode = true;
+  } else if (overwriteIdx !== -1) {
+    commandPart = input.substring(0, overwriteIdx).trim();
+    redirectFile = input.substring(overwriteIdx + 1).trim();
+    appendMode = false;
+  }
+
+  if (redirectFile) {
+    const output = await executeCaptured(commandPart);
+    const { dir, fileName } = getParentDirAndName(redirectFile);
+    if (!dir) {
+      addOutput('重定向失败: 目录不存在', 'error');
+      return;
+    }
+    if (appendMode && dir.children[fileName] && dir.children[fileName].type === 'file') {
+      dir.children[fileName].content += '\n' + output;
+    } else {
+      dir.children[fileName] = { type: 'file', content: output };
+    }
+    saveState();
+    return;
+  }
+
+  // 正常执行
+  try {
+    await processCommandDirect(input, '');
+  } catch (e) {
+    addOutput('命令执行错误: ' + (e.message || e), 'error');
+  }
+}
+
+function splitPipes(input) {
+  const segments = [];
+  let current = '';
+  let inQuote = false;
+  let quoteChar = '';
+
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i];
+    if (inQuote) {
+      current += ch;
+      if (ch === quoteChar) inQuote = false;
+    } else if (ch === '"' || ch === "'") {
+      inQuote = true;
+      quoteChar = ch;
+      current += ch;
+    } else if (ch === '|') {
+      segments.push(current);
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  segments.push(current);
+  return segments;
+}
+
+function findRedirect(input, op) {
+  let inQuote = false;
+  let quoteChar = '';
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i];
+    if (inQuote) {
+      if (ch === quoteChar) inQuote = false;
+    } else if (ch === '"' || ch === "'") {
+      inQuote = true;
+      quoteChar = ch;
+    } else if (input.substring(i, i + op.length) === op) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+async function processCommandDirect(input, stdin = '') {
+  const parts = input.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
+  if (parts.length === 0) return;
+
+  const cmd = parts[0].toLowerCase();
+  const args = parts.slice(1).map(a => a.replace(/^"|"$/g, ''));
+
+  switch (cmd) {
+    case 'help': cmdHelp(); break;
+    case 'clear': clearTerminal(); break;
+    case 'echo': cmdEcho(args, stdin); break;
+    case 'date': addOutput(new Date().toLocaleString('zh-CN', { dateStyle: 'full', timeStyle: 'long' }), 'info'); break;
+    case 'whoami': addOutput(env.USER, 'result'); break;
+    case 'hostname': addOutput(env.HOST, 'result'); break;
+    case 'pwd': addOutput(currentDir === '~' ? '/home/' + env.USER : currentDir.replace('~', '/home/' + env.USER), 'result'); break;
+    case 'ls': cmdLs(args); break;
+    case 'cd': cmdCd(args); break;
+    case 'cat': cmdCat(args, stdin); break;
+    case 'mkdir': cmdMkdir(args); break;
+    case 'touch': cmdTouch(args); break;
+    case 'rm': cmdRm(args); break;
+    case 'tree': cmdTree(args); break;
+    case 'env': cmdEnv(); break;
+    case 'export': cmdExport(args); break;
+    case 'history': cmdHistory(); break;
+    case 'uname': cmdUname(args); break;
+    case 'uptime': cmdUptime(); break;
+    case 'ps': cmdPs(); break;
+    case 'top': await cmdTop(); break;
+    case 'ping': await cmdPing(args); break;
+    case 'ifconfig': cmdIfconfig(); break;
+    case 'curl': await cmdCurl(args); break;
+    case 'ssh': await cmdSsh(args); break;
+    case 'neofetch': cmdNeofetch(); break;
+    case 'matrix': await cmdMatrix(); break;
+    case 'weather': await cmdWeather(args); break;
+    case 'calc': cmdCalc(args); break;
+    case 'cowsay': cmdCowsay(args); break;
+    case 'fortune': cmdFortune(); break;
+    case 'color': cmdColor(args); break;
+    case 'reboot': await cmdReboot(); break;
+    case 'exit': cmdExit(); break;
+    // 新增命令
+    case 'ai': await cmdAi(args); break;
+    case 'write': cmdWrite(args); break;
+    case 'append': cmdAppend(args); break;
+    case 'edit': cmdEdit(args); break;
+    case 'grep': cmdGrep(args, stdin); break;
+    case 'wc': cmdWc(args, stdin); break;
+    case 'find': cmdFind(args); break;
+    case 'alias': cmdAlias(args); break;
+    case 'unalias': cmdUnalias(args); break;
+    case 'head': cmdHead(args); break;
+    case 'tail': cmdTail(args); break;
+    case 'diff': cmdDiff(args); break;
+    case 'chmod': cmdChmod(args); break;
+    case 'man': cmdMan(args); break;
+    case 'git': await cmdGit(args); break;
+    case 'save': cmdSave(); break;
+    case 'load': cmdLoad(); break;
+    case 'reset': await cmdReset(args); break;
+    default:
+      addOutput(`nexus: 未找到命令: ${cmd}`, 'error');
+      addOutput(`输入 'help' 查看可用命令列表`, 'dim');
+  }
+}
+
+// ═══════════════════════════════════════════
+// AI 对话模拟
+// ═══════════════════════════════════════════
+
+const aiKnowledge = {
+  programming: [
+    {
+      patterns: ['排序', 'sort', '排序算法'],
+      response: `关于排序算法，这里做一个全面的介绍：
+
+【冒泡排序】时间复杂度 O(n²)
+  逐对比较相邻元素，将较大的往后交换。简单但效率低。
+  for i in range(n):
+    for j in range(n-i-1):
+      if arr[j] > arr[j+1]: arr[j], arr[j+1] = arr[j+1], arr[j]
+
+【快速排序】平均 O(n log n)，最坏 O(n²)
+  选取基准元素，将数组分为小于和大于基准的两部分，递归排序。
+  def quicksort(arr):
+    if len(arr) <= 1: return arr
+    pivot = arr[len(arr)//2]
+    return quicksort([x for x in arr if x<pivot]) + [pivot] + quicksort([x for x in arr if x>pivot])
+
+【归并排序】稳定 O(n log n)
+  分治策略，将数组一分为二，分别排序后合并。
+
+【堆排序】O(n log n)，原地排序
+  利用堆数据结构，适合处理大数据集。
+
+实际应用中，Python 的 Timsort、C++ 的 Introsort 都是混合策略。`
+    },
+    {
+      patterns: ['递归', 'recursion', '递归算法'],
+      response: `递归是函数调用自身的编程技术，核心要素：
+
+【基线条件】递归终止的条件，防止无限递归
+【递归条件】将问题分解为更小的子问题
+
+经典案例 - 阶乘：
+  def factorial(n):
+    if n <= 1: return 1    # 基线条件
+    return n * factorial(n-1)  # 递归条件
+
+经典案例 - 斐波那契：
+  def fib(n):
+    if n <= 1: return n
+    return fib(n-1) + fib(n-2)
+
+⚠️ 注意事项：
+  1. 必须有明确的终止条件
+  2. 每次递归调用应使问题规模缩小
+  3. Python 默认递归深度限制为 1000
+  4. 可用尾递归优化或改用迭代避免栈溢出
+  5. 斐波那契可用记忆化搜索大幅优化`
+    },
+    {
+      patterns: ['设计模式', 'design pattern', '模式'],
+      response: `常用设计模式分类：
+
+【创建型】
+  - 单例模式：确保类只有一个实例
+  - 工厂模式：将对象创建逻辑封装
+  - 建造者模式：分步构建复杂对象
+
+【结构型】
+  - 适配器模式：接口兼容转换
+  - 装饰器模式：动态添加功能
+  - 代理模式：控制对象访问
+
+【行为型】
+  - 观察者模式：发布-订阅机制
+  - 策略模式：算法族封装与切换
+  - 命令模式：请求参数化
+
+选择原则：优先组合而非继承，面向接口编程，保持单一职责。`
+    },
+    {
+      patterns: ['闭包', 'closure', '作用域'],
+      response: `闭包（Closure）是函数与其词法环境的组合：
+
+function makeCounter() {
+  let count = 0;  // 被闭包捕获的变量
+  return function() {
+    return ++count;  // 内部函数引用外部变量
+  };
+}
+const counter = makeCounter();
+counter(); // 1
+counter(); // 2
+
+关键特性：
+  1. 内部函数可以访问外部函数的变量
+  2. 外部函数执行完毕后，变量仍被保留
+  3. 每次调用外部函数创建新的闭包实例
+
+常见用途：数据封装、柯里化、回调函数、模块模式。`
+    },
+    {
+      patterns: ['promise', 'async', '异步', 'await', '并发'],
+      response: `JavaScript 异步编程核心概念：
+
+【Promise】表示异步操作的最终结果
+  const p = new Promise((resolve, reject) => {
+    setTimeout(() => resolve('完成'), 1000);
+  });
+  p.then(result => console.log(result));
+
+【async/await】Promise 的语法糖
+  async function fetchData() {
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      return data;
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+【并发控制】
+  Promise.all()     - 全部完成才 resolve
+  Promise.race()    - 最快完成的决定结果
+  Promise.allSettled() - 等待全部完成（不论成败）
+  Promise.any()     - 任意一个成功即 resolve`
+    },
+    {
+      patterns: ['数据库', 'database', 'sql', 'mysql', 'postgres'],
+      response: `数据库核心知识概要：
+
+【SQL 基础】
+  SELECT col FROM table WHERE cond GROUP BY col HAVING cond ORDER BY col
+  INSERT INTO table (cols) VALUES (vals)
+  UPDATE table SET col=val WHERE cond
+  DELETE FROM table WHERE cond
+
+【索引优化】
+  - B+Tree 索引：最常用，适合范围查询
+  - 哈希索引：等值查询极快
+  - 覆盖索引：查询只需索引数据
+  - 复合索引：遵循最左前缀原则
+
+【事务 ACID】
+  原子性、一致性、隔离性、持久性
+
+【NoSQL 选择】
+  Redis - 缓存/会话
+  MongoDB - 文档存储
+  Elasticsearch - 全文搜索`
+    },
+    {
+      patterns: ['http', '网络', '协议', 'tcp', '网络请求'],
+      response: `HTTP 协议核心知识：
+
+【请求方法】
+  GET     - 获取资源
+  POST    - 创建资源
+  PUT     - 更新资源（全量）
+  PATCH   - 更新资源（部分）
+  DELETE  - 删除资源
+
+【状态码】
+  200 OK | 201 Created | 301 永久重定向
+  400 Bad Request | 401 Unauthorized | 403 Forbidden
+  404 Not Found | 500 Internal Server Error
+
+【HTTP/2 改进】
+  多路复用、头部压缩、服务器推送
+
+【HTTPS】
+  TLS 握手 → 证书验证 → 对称加密通信
+
+【TCP 三次握手】
+  SYN → SYN+ACK → ACK`
+    },
+    {
+      patterns: ['python', 'Python'],
+      response: `Python 核心特性速览：
+
+【数据结构】
+  list: [1,2,3]    可变有序
+  tuple: (1,2,3)   不可变有序
+  dict: {'a':1}    键值对
+  set: {1,2,3}     去重无序
+
+【推导式】
+  [x**2 for x in range(10) if x%2==0]
+  {k:v for k,v in items}
+  {x for x in range(10)}
+
+【装饰器】
+  def timer(func):
+    def wrapper(*args, **kwargs):
+      start = time.time()
+      result = func(*args, **kwargs)
+      print(f'{func.__name__}: {time.time()-start:.3f}s')
+      return result
+    return wrapper
+
+【常用库】
+  requests, flask/django, numpy, pandas, pytest`
+    },
+    {
+      patterns: ['javascript', 'JavaScript', 'JS', 'js'],
+      response: `JavaScript 核心知识：
+
+【变量声明】
+  const - 常量，块级作用域
+  let   - 变量，块级作用域
+  var   - 函数作用域（避免使用）
+
+【ES6+ 特性】
+  解构赋值: const {a, b} = obj
+  展开运算: [...arr1, ...arr2]
+  模板字符串: \`Hello \${name}\`
+  可选链: obj?.prop?.method?.()
+  空值合并: value ?? default
+
+【数组方法】
+  map/filter/reduce - 函数式处理
+  find/findIndex - 查找元素
+  flat/flatMap - 扁平化
+
+【模块化】
+  import/export - ES Modules
+  require/module.exports - CommonJS`
+    },
+    {
+      patterns: ['react', 'React', 'vue', 'Vue', '前端框架', '组件'],
+      response: `前端框架核心对比：
+
+【React】
+  - JSX 语法，函数式组件为主
+  - Hooks: useState, useEffect, useContext, useReducer
+  - 虚拟 DOM + Diff 算法
+  - 状态管理: Redux, Zustand, Jotai
+
+【Vue】
+  - 模板语法，渐进式框架
+  - 响应式系统: ref, reactive, computed
+  - 组合式 API (Vue 3)
+  - 状态管理: Pinia
+
+【共同趋势】
+  1. 组件化开发
+  2. 响应式数据绑定
+  3. 虚拟 DOM
+  4. 服务端渲染 (SSR)
+  5. TypeScript 支持
+
+选择建议：大型项目 React 生态更丰富，中小项目 Vue 上手更快。`
+    }
+  ],
+  code: [
+    {
+      patterns: ['写', '生成', '代码', 'code', '实现', '编写'],
+      response: `好的，我来帮你生成代码示例。以下是一个通用的工具函数库：
+
+// ===== 实用工具函数 =====
+
+// 防抖函数
+function debounce(fn, delay = 300) {
+  let timer = null;
+  return function(...args) {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn.apply(this, args), delay);
+  };
+}
+
+// 节流函数
+function throttle(fn, interval = 200) {
+  let lastTime = 0;
+  return function(...args) {
+    const now = Date.now();
+    if (now - lastTime >= interval) {
+      lastTime = now;
+      fn.apply(this, args);
+    }
+  };
+}
+
+// 深拷贝
+function deepClone(obj, cache = new WeakMap()) {
+  if (obj === null || typeof obj !== 'object') return obj;
+  if (cache.has(obj)) return cache.get(obj);
+  const clone = Array.isArray(obj) ? [] : {};
+  cache.set(obj, clone);
+  for (const key of Object.keys(obj)) {
+    clone[key] = deepClone(obj[key], cache);
+  }
+  return clone;
+}
+
+// 格式化日期
+function formatDate(date, fmt = 'YYYY-MM-DD HH:mm:ss') {
+  const d = new Date(date);
+  const map = {
+    YYYY: d.getFullYear(), MM: String(d.getMonth()+1).padStart(2,'0'),
+    DD: String(d.getDate()).padStart(2,'0'),
+    HH: String(d.getHours()).padStart(2,'0'),
+    mm: String(d.getMinutes()).padStart(2,'0'),
+    ss: String(d.getSeconds()).padStart(2,'0')
+  };
+  return Object.entries(map).reduce((s,[k,v]) => s.replace(k,v), fmt);
+}
+
+如果你需要特定功能的代码，请描述更详细的需求！`
+    },
+    {
+      patterns: ['算法', 'algorithm', '数据结构', '链表', '树', '图', '栈', '队列'],
+      response: `数据结构与算法核心要点：
+
+【线性结构】
+  数组 - O(1)随机访问，O(n)插入删除
+  链表 - O(1)插入删除，O(n)查找
+  栈   - LIFO，用于递归/括号匹配/表达式求值
+  队列 - FIFO，用于BFS/任务调度
+
+【树结构】
+  二叉搜索树(BST) - 左小右大，平均O(log n)
+  AVL树 - 平衡BST，严格O(log n)
+  红黑树 - 近似平衡，工程常用
+  B+树  - 数据库索引首选
+
+【图算法】
+  BFS - 层次遍历，最短路径(无权)
+  DFS - 深度探索，连通性检测
+  Dijkstra - 最短路径(有权)
+  拓扑排序 - 依赖关系处理
+
+【时间复杂度排序】
+  O(1) < O(log n) < O(n) < O(n log n) < O(n²) < O(2ⁿ) < O(n!)
+
+推荐练习：LeetCode Hot 100，按分类刷题效率最高。`
+    }
+  ],
+  system: [
+    {
+      patterns: ['linux', 'Linux', 'shell', 'bash', '终端', '命令行'],
+      response: `Linux 常用命令速查：
+
+【文件操作】
+  ls -la       详细列表
+  cd /path     切换目录
+  cp -r src dst  递归复制
+  mv old new   移动/重命名
+  find / -name "*.log"  查找文件
+  grep -rn "pattern" .  搜索内容
+
+【权限管理】
+  chmod 755 file   rwxr-xr-x
+  chown user:group file
+  sudo command     提权执行
+
+【进程管理】
+  ps aux          查看进程
+  kill -9 PID     强制终止
+  top / htop      实时监控
+  nohup cmd &     后台运行
+
+【网络工具】
+  curl -X POST url  HTTP请求
+  netstat -tlnp     端口监听
+  ss -tlnp          替代netstat
+  nslookup domain   DNS查询
+
+【文本处理】
+  awk '{print $1}'  列提取
+  sed 's/old/new/g' 替换
+  sort | uniq -c    排序去重计数
+  head -n 20        前20行`
+    },
+    {
+      patterns: ['docker', '容器', 'k8s', 'kubernetes', '部署', 'devops'],
+      response: `Docker & Kubernetes 核心：
+
+【Docker 基础】
+  docker build -t app .        构建镜像
+  docker run -d -p 8080:80 app 运行容器
+  docker-compose up -d         编排启动
+  docker exec -it <id> bash    进入容器
+
+【Dockerfile 模板】
+  FROM node:18-alpine
+  WORKDIR /app
+  COPY package*.json ./
+  RUN npm ci --production
+  COPY . .
+  EXPOSE 3000
+  CMD ["node", "server.js"]
+
+【K8s 核心概念】
+  Pod - 最小部署单元
+  Service - 服务发现与负载均衡
+  Deployment - 声明式更新
+  ConfigMap/Secret - 配置管理
+  Ingress - 外部流量入口
+
+【常用 kubectl】
+  kubectl get pods -A
+  kubectl apply -f manifest.yaml
+  kubectl logs -f <pod>
+  kubectl describe pod <pod>`
+    }
+  ],
+  math: [
+    {
+      patterns: ['数学', '计算', '公式', '方程', '积分', '微分', '概率'],
+      response: `数学核心公式速查：
+
+【微积分】
+  导数: f'(x) = lim(h→0) [f(x+h)-f(x)]/h
+  积分: ∫f(x)dx = F(x) + C
+  链式法则: (f∘g)' = f'(g(x))·g'(x)
+
+【线性代数】
+  矩阵乘法: C = AB, c_ij = Σ a_ik · b_kj
+  行列式: |A| = Σ sgn(σ)·a_1σ(1)·...·a_nσ(n)
+  特征值: Av = λv
+
+【概率统计】
+  贝叶斯: P(A|B) = P(B|A)·P(A) / P(B)
+  期望: E[X] = Σ x·P(x)
+  方差: Var(X) = E[X²] - (E[X])²
+  正态分布: X ~ N(μ, σ²)
+
+【离散数学】
+  排列: P(n,k) = n!/(n-k)!
+  组合: C(n,k) = n!/(k!(n-k)!)
+
+需要具体计算可以使用 calc 命令，例如: calc 2^10`
+    }
+  ],
+  general: [
+    {
+      patterns: ['你好', 'hello', 'hi', '嗨', 'hey', '您好'],
+      response: `你好！我是 NEXUS AI 助手 🤖
+
+我可以帮你解答以下类型的问题：
+  💻 编程问题 - 语言特性、算法、设计模式
+  🖥️ 系统操作 - Linux命令、Docker、部署
+  🔢 数学计算 - 公式、推导、概念
+  📝 代码生成 - 工具函数、模板代码
+  💬 技术闲聊 - 行业趋势、最佳实践
+
+试试问我：
+  ai 什么是闭包
+  ai 快速排序算法
+  ai Docker 基础命令
+  ai 生成防抖函数代码`
+    },
+    {
+      patterns: ['谢谢', '感谢', 'thanks', 'thank'],
+      response: `不客气！随时可以继续提问。
+
+💡 提示：使用 ai -c 可以清除对话历史，开始新的话题。`
+    },
+    {
+      patterns: ['你是谁', '你是什么', 'who are you', '介绍'],
+      response: `我是 NEXUS Terminal 内置的 AI 模拟助手。
+
+虽然我是基于模式匹配的模拟系统，但我可以提供：
+  ✅ 编程概念解析
+  ✅ 代码示例生成
+  ✅ 系统操作指南
+  ✅ 算法思路讲解
+  ✅ 技术问题解答
+
+我的知识范围覆盖主流编程语言、框架、工具和计算机科学基础。有什么想问的？`
+    },
+    {
+      patterns: ['学习', '入门', '新手', '开始', '路线', 'roadmap'],
+      response: `编程学习路线推荐：
+
+【零基础入门】
+  1. 选择一门语言：Python（推荐）或 JavaScript
+  2. 学习基础语法：变量、循环、函数
+  3. 做小项目：计算器、待办清单、猜数字
+
+【进阶提升】
+  4. 数据结构与算法（LeetCode 刷题）
+  5. 学习框架：Flask/Django 或 React/Vue
+  6. 数据库：SQL 基础 + 一个 NoSQL
+  7. Git 版本控制
+
+【专业方向】
+  前端: HTML/CSS → JS → React/Vue → TypeScript
+  后端: 语言基础 → Web框架 → 数据库 → 微服务
+  数据: Python → NumPy/Pandas → ML → 深度学习
+  运维: Linux → Docker → K8s → CI/CD
+
+关键：多写代码，多做项目，多读优秀源码！`
+    }
+  ]
+};
+
+async function cmdAi(args) {
+  if (args.length === 0) {
+    addOutput('用法: ai <问题>  |  ai -c 清除对话历史', 'info');
+    addOutput('示例: ai 什么是闭包', 'dim');
+    return;
+  }
+
+  if (args[0] === '-c') {
+    aiConversationHistory = [];
+    addOutput('[AI] 对话历史已清除', 'system');
+    return;
+  }
+
+  const question = args.join(' ');
+  const response = generateAiResponse(question);
+  aiConversationHistory.push({ q: question, a: response });
+
+  // 打字效果输出
+  addOutput('');
+  addOutput('┌─ AI ─────────────────────────────────', 'ai');
+  await typeOutput(response, 'ai');
+  addOutput('└──────────────────────────────────────', 'ai');
+  addOutput('');
+}
+
+function generateAiResponse(question) {
+  const q = question.toLowerCase();
+
+  // 遍历所有知识库类别，按优先级匹配
+  const categories = ['programming', 'code', 'system', 'math', 'general'];
+
+  for (const category of categories) {
+    const knowledge = aiKnowledge[category];
+    if (!knowledge) continue;
+
+    for (const entry of knowledge) {
+      for (const pattern of entry.patterns) {
+        if (q.includes(pattern.toLowerCase())) {
+          return entry.response;
+        }
+      }
+    }
+  }
+
+  // 通用回复
+  const fallbacks = [
+    `这是一个很好的问题！关于"${question}"，我目前没有专门的知识条目，但可以提供一些思路：
+
+1. 尝试将问题拆解为更小的子问题
+2. 搜索相关技术文档和社区讨论
+3. 从基础概念入手，逐步深入
+
+你可以尝试更具体地描述问题，比如：
+  - 指定编程语言（Python/JavaScript/等）
+  - 说明应用场景（Web/数据/系统/等）
+  - 提供代码片段或错误信息
+
+我会尽力给出更有针对性的回答！`,
+
+    `关于"${question}"，我的理解是：
+
+这涉及到一个比较广泛的话题。以下是一些可能有用的方向：
+
+📌 查阅官方文档通常是获取准确信息的最佳途径
+📌 在 Stack Overflow 上搜索相关问题
+📌 阅读开源项目的源码学习实践方案
+
+如果你能提供更多上下文，我可以给出更精确的建议。试试：
+  ai ${question} 的实现方法
+  ai ${question} 最佳实践`,
+
+    `让我想想"${question}"...
+
+这个问题可以从多个角度来分析：
+
+🔍 技术角度：关注实现细节和性能考量
+🏗️ 架构角度：关注系统设计和可扩展性
+🛡️ 安全角度：关注潜在风险和防护措施
+
+建议你用更具体的关键词重新提问，例如包含：
+  - 特定技术名词（闭包、Promise、Docker...）
+  - 编程语言名称（Python、JavaScript...）
+  - 操作类型（排序、生成、部署...）
+
+这样我能给出更详细的回答！`
+  ];
+
+  return fallbacks[Math.floor(Math.random() * fallbacks.length)];
+}
+
+async function typeOutput(text, type = 'ai') {
+  const line = document.createElement('div');
+  line.className = `output-line ${type}`;
+  terminal.appendChild(line);
+
+  const chars = text.split('');
+  let buffer = '';
+  const chunkSize = 3; // 每次输出3个字符，加快速度
+
+  for (let i = 0; i < chars.length; i += chunkSize) {
+    const chunk = chars.slice(i, i + chunkSize).join('');
+    buffer += chunk;
+    line.textContent = buffer;
+    scrollToBottom();
+    await sleep(15);
+  }
+}
+
+// ═══════════════════════════════════════════
+// 文件编辑命令
+// ═══════════════════════════════════════════
+
+function cmdWrite(args) {
+  if (args.length < 2) {
+    addOutput('用法: write <file> <content>', 'error');
+    return;
+  }
+  const fileName = args[0];
+  const content = args.slice(1).join(' ');
+  const dir = resolveDir(currentDir);
+  dir.children[fileName] = { type: 'file', content: content };
+  addOutput(`已写入 ${fileName} (${content.length} 字节)`, 'dim');
+  saveState();
+}
+
+function cmdAppend(args) {
+  if (args.length < 2) {
+    addOutput('用法: append <file> <content>', 'error');
+    return;
+  }
+  const fileName = args[0];
+  const content = args.slice(1).join(' ');
+  const dir = resolveDir(currentDir);
+  if (dir.children[fileName] && dir.children[fileName].type === 'file') {
+    dir.children[fileName].content += '\n' + content;
+    addOutput(`已追加到 ${fileName}`, 'dim');
+  } else {
+    dir.children[fileName] = { type: 'file', content: content };
+    addOutput(`已创建 ${fileName} 并写入`, 'dim');
+  }
+  saveState();
+}
+
+function cmdEdit(args) {
+  if (!args[0]) {
+    addOutput('用法: edit <file>', 'error');
+    return;
+  }
+  enterEditMode(args[0]);
+}
+
+// ═══════════════════════════════════════════
+// 新增实用命令
+// ═══════════════════════════════════════════
+
+function cmdGrep(args, stdin = '') {
+  if (args.length < 1) {
+    addOutput('用法: grep <pattern> [file]', 'error');
+    return;
+  }
+
+  const pattern = args[0];
+  let text = '';
+
+  if (args[1]) {
+    const file = getFile(args[1]);
+    if (!file) {
+      addOutput(`grep: ${args[1]}: 文件不存在`, 'error');
+      return;
+    }
+    if (file.type === 'dir') {
+      addOutput(`grep: ${args[1]}: 是一个目录`, 'error');
+      return;
+    }
+    text = file.content || '';
+  } else if (stdin) {
+    text = stdin;
+  } else {
+    addOutput('grep: 缺少文件参数或管道输入', 'error');
+    return;
+  }
+
+  const lines = text.split('\n');
+  const regex = new RegExp(pattern, 'gi');
+  let matchCount = 0;
+
+  for (const line of lines) {
+    if (regex.test(line)) {
+      const highlighted = line.replace(new RegExp(pattern, 'gi'), match => `<span style="color:var(--red);font-weight:700">${escapeHTML(match)}</span>`);
+      addOutputHTML(highlighted, 'result');
+      matchCount++;
+    }
+  }
+
+  if (matchCount === 0) {
+    addOutput('(无匹配结果)', 'dim');
+  }
+}
+
+function cmdWc(args, stdin = '') {
+  let text = '';
+  let fileName = '';
+
+  if (args[0]) {
+    const file = getFile(args[0]);
+    if (!file) {
+      addOutput(`wc: ${args[0]}: 文件不存在`, 'error');
+      return;
+    }
+    if (file.type === 'dir') {
+      addOutput(`wc: ${args[0]}: 是一个目录`, 'error');
+      return;
+    }
+    text = file.content || '';
+    fileName = args[0];
+  } else if (stdin) {
+    text = stdin;
+  } else {
+    addOutput('wc: 缺少文件参数或管道输入', 'error');
+    return;
+  }
+
+  const lines = text.split('\n').length;
+  const words = text.split(/\s+/).filter(Boolean).length;
+  const chars = text.length;
+
+  if (fileName) {
+    addOutput(`  ${lines} ${words} ${chars} ${fileName}`, 'result');
+  } else {
+    addOutput(`  ${lines} 行  ${words} 字  ${chars} 字符`, 'result');
+  }
+}
+
+function cmdFind(args) {
+  if (!args[0]) {
+    addOutput('用法: find <name>', 'error');
+    return;
+  }
+
+  const searchName = args[0].toLowerCase();
+  const results = [];
+
+  function search(node, path) {
+    if (!node || !node.children) return;
+    for (const [name, entry] of Object.entries(node.children)) {
+      const fullPath = path ? `${path}/${name}` : name;
+      if (name.toLowerCase().includes(searchName)) {
+        results.push({ name, path: fullPath, type: entry.type });
+      }
+      if (entry.type === 'dir') {
+        search(entry, fullPath);
+      }
+    }
+  }
+
+  search(fileSystem['~'], '~');
+
+  if (results.length === 0) {
+    addOutput(`find: 未找到匹配 '${args[0]}' 的文件`, 'dim');
+  } else {
+    for (const r of results) {
+      const typeIcon = r.type === 'dir' ? '📁' : '📄';
+      addOutput(`  ${typeIcon} ${r.path}`, 'result');
+    }
+    addOutput(`共找到 ${results.length} 个结果`, 'dim');
+  }
+}
+
+function cmdAlias(args) {
+  if (args.length === 0) {
+    if (Object.keys(aliases).length === 0) {
+      addOutput('(无别名)', 'dim');
+    } else {
+      for (const [name, cmd] of Object.entries(aliases)) {
+        addOutputHTML(`<span style="color:var(--cyan)">${name}</span>=<span style="color:var(--green-dim)">'${cmd}'</span>`, 'result');
+      }
+    }
+    return;
+  }
+
+  const arg = args.join(' ');
+  const eqIdx = arg.indexOf('=');
+  if (eqIdx === -1) {
+    addOutput('用法: alias <name>=<command>', 'error');
+    return;
+  }
+
+  const name = arg.substring(0, eqIdx).trim();
+  const cmd = arg.substring(eqIdx + 1).trim().replace(/^['"]|['"]$/g, '');
+
+  if (!name || !cmd) {
+    addOutput('alias: 名称和命令不能为空', 'error');
+    return;
+  }
+
+  aliases[name] = cmd;
+  addOutput(`别名已设置: ${name}='${cmd}'`, 'dim');
+  saveState();
+}
+
+function cmdUnalias(args) {
+  if (!args[0]) {
+    addOutput('用法: unalias <name>', 'error');
+    return;
+  }
+
+  if (aliases[args[0]]) {
+    delete aliases[args[0]];
+    addOutput(`别名 '${args[0]}' 已删除`, 'dim');
+    saveState();
+  } else {
+    addOutput(`unalias: '${args[0]}' 不是别名`, 'error');
+  }
+}
+
+function cmdHead(args) {
+  if (!args[0]) {
+    addOutput('用法: head <file> [n]', 'error');
+    return;
+  }
+
+  const file = getFile(args[0]);
+  if (!file) {
+    addOutput(`head: ${args[0]}: 文件不存在`, 'error');
+    return;
+  }
+  if (file.type === 'dir') {
+    addOutput(`head: ${args[0]}: 是一个目录`, 'error');
+    return;
+  }
+
+  const n = parseInt(args[1]) || 10;
+  const lines = (file.content || '').split('\n').slice(0, n);
+  for (const line of lines) {
+    addOutput(line, 'result');
+  }
+}
+
+function cmdTail(args) {
+  if (!args[0]) {
+    addOutput('用法: tail <file> [n]', 'error');
+    return;
+  }
+
+  const file = getFile(args[0]);
+  if (!file) {
+    addOutput(`tail: ${args[0]}: 文件不存在`, 'error');
+    return;
+  }
+  if (file.type === 'dir') {
+    addOutput(`tail: ${args[0]}: 是一个目录`, 'error');
+    return;
+  }
+
+  const n = parseInt(args[1]) || 10;
+  const allLines = (file.content || '').split('\n');
+  const lines = allLines.slice(-n);
+  for (const line of lines) {
+    addOutput(line, 'result');
+  }
+}
+
+function cmdDiff(args) {
+  if (args.length < 2) {
+    addOutput('用法: diff <file1> <file2>', 'error');
+    return;
+  }
+
+  const file1 = getFile(args[0]);
+  const file2 = getFile(args[1]);
+
+  if (!file1) {
+    addOutput(`diff: ${args[0]}: 文件不存在`, 'error');
+    return;
+  }
+  if (!file2) {
+    addOutput(`diff: ${args[1]}: 文件不存在`, 'error');
+    return;
+  }
+  if (file1.type === 'dir' || file2.type === 'dir') {
+    addOutput('diff: 不支持目录比较', 'error');
+    return;
+  }
+
+  const lines1 = (file1.content || '').split('\n');
+  const lines2 = (file2.content || '').split('\n');
+  const maxLen = Math.max(lines1.length, lines2.length);
+
+  let hasDiff = false;
+  for (let i = 0; i < maxLen; i++) {
+    const l1 = lines1[i] !== undefined ? lines1[i] : '';
+    const l2 = lines2[i] !== undefined ? lines2[i] : '';
+
+    if (l1 !== l2) {
+      hasDiff = true;
+      addOutput(`@@ 第 ${i + 1} 行 @@`, 'info');
+      if (l1 !== '') addOutput(`- ${l1}`, 'error');
+      if (l2 !== '') addOutput(`+ ${l2}`, 'ai');
+    }
+  }
+
+  if (!hasDiff) {
+    addOutput('两个文件内容相同', 'dim');
+  }
+}
+
+function cmdChmod(args) {
+  if (args.length < 2) {
+    addOutput('用法: chmod <mode> <file>', 'error');
+    return;
+  }
+
+  const file = getFile(args[1]);
+  if (!file) {
+    addOutput(`chmod: ${args[1]}: 文件不存在`, 'error');
+    return;
+  }
+
+  const mode = args[0];
+  if (!/^[0-7]{3}$/.test(mode) && !/^[rwx-]{9}$/.test(mode)) {
+    addOutput(`chmod: 无效权限模式: ${mode}`, 'error');
+    return;
+  }
+
+  // 模拟修改权限（实际文件系统不存储权限，仅模拟输出）
+  addOutput(`${args[1]} 的权限已修改为 ${mode}`, 'dim');
+}
+
+function cmdMan(args) {
+  if (!args[0]) {
+    addOutput('用法: man <command>', 'error');
+    return;
+  }
+
+  const cmd = args[0].toLowerCase();
+  const manPages = {
+    help: `HELP(1)              NEXUS User Commands             HELP(1)
+
+NAME
+    help - 显示可用命令列表
+
+SYNOPSIS
+    help
+
+DESCRIPTION
+    显示 NEXUS Terminal 所有可用命令的分类列表，
+    包括文件操作、系统信息、网络、工具等类别。`,
+    ls: `LS(1)                NEXUS User Commands               LS(1)
+
+NAME
+    ls - 列出目录内容
+
+SYNOPSIS
+    ls [options] [path]
+
+OPTIONS
+    -a    显示隐藏文件
+    -l    使用长格式列出
+    -la   长格式+隐藏文件
+
+EXAMPLES
+    ls          列出当前目录
+    ls -la      详细列出所有文件
+    ls projects 列出指定目录`,
+    cd: `CD(1)                NEXUS User Commands               CD(1)
+
+NAME
+    cd - 切换工作目录
+
+SYNOPSIS
+    cd [path]
+
+DESCRIPTION
+    切换当前工作目录。无参数时返回主目录。
+
+EXAMPLES
+    cd projects     进入 projects 目录
+    cd ..           返回上级目录
+    cd ~            返回主目录`,
+    cat: `CAT(1)               NEXUS User Commands              CAT(1)
+
+NAME
+    cat - 连接并显示文件内容
+
+SYNOPSIS
+    cat <file>
+
+DESCRIPTION
+    显示指定文件的全部内容。支持管道输入。`,
+    grep: `GREP(1)              NEXUS User Commands            GREP(1)
+
+NAME
+    grep - 在文件中搜索模式
+
+SYNOPSIS
+    grep <pattern> [file]
+
+DESCRIPTION
+    搜索文件中匹配正则表达式的行并输出。
+    支持管道输入，可用于 ls | grep 等组合。
+
+EXAMPLES
+    grep todo notes.txt     在文件中搜索
+    ls | grep project       管道搜索`,
+    ai: `AI(1)                NEXUS User Commands               AI(1)
+
+NAME
+    ai - AI 对话模拟
+
+SYNOPSIS
+    ai <question>
+    ai -c
+
+DESCRIPTION
+    与模拟 AI 助手对话，支持编程、系统、数学等话题。
+    使用模式匹配生成智能回复，带打字效果。
+
+OPTIONS
+    -c    清除对话历史
+
+EXAMPLES
+    ai 什么是闭包
+    ai 快速排序算法
+    ai 生成防抖函数代码`,
+    git: `GIT(1)               NEXUS User Commands              GIT(1)
+
+NAME
+    git - 版本控制系统
+
+SYNOPSIS
+    git <subcommand> [args]
+
+SUBCOMMANDS
+    init              初始化仓库
+    add <file>        暂存文件
+    commit -m "msg"   提交更改
+    status            查看状态
+    log               查看提交历史
+    diff [file]       查看差异
+    branch [name]     查看/创建分支
+    checkout <branch> 切换分支
+
+EXAMPLES
+    git init
+    git add main.py
+    git commit -m "初始提交"
+    git log`,
+    edit: `EDIT(1)              NEXUS User Commands             EDIT(1)
+
+NAME
+    edit - 行编辑器
+
+SYNOPSIS
+    edit <file>
+
+DESCRIPTION
+    进入简易行编辑器模式。逐行输入内容。
+
+COMMANDS (在编辑器内)
+    :wq    保存并退出
+    :q     放弃修改退出
+
+EXAMPLES
+    edit notes.txt     编辑已有文件
+    edit newfile.txt   创建并编辑新文件`,
+    pipe: `PIPE(7)              NEXUS Miscellaneous              PIPE(7)
+
+NAME
+    管道与重定向
+
+SYNOPSIS
+    command1 | command2
+    command > file
+    command >> file
+
+DESCRIPTION
+    |  管道：将前一个命令的输出作为后一个命令的输入
+    >  重定向：将输出写入文件（覆盖）
+    >> 重定向：将输出追加到文件
+
+EXAMPLES
+    ls | grep nexus       管道搜索
+    cat file | grep key   管道过滤
+    echo hello > file     输出写入文件
+    echo world >> file    追加到文件
+    env | grep USER       环境变量过滤`
+  };
+
+  if (manPages[cmd]) {
+    addOutput(manPages[cmd], 'info');
+  } else if (commands[cmd]) {
+    addOutput(`${cmd.toUpperCase()}(1)              NEXUS User Commands          ${cmd.toUpperCase()}(1)`, 'info');
+    addOutput('');
+    addOutput(`NAME`, 'info');
+    addOutput(`    ${cmd} - ${commands[cmd]}`, 'result');
+    addOutput('');
+    addOutput(`SYNOPSIS`, 'info');
+    addOutput(`    ${cmd}`, 'result');
+  } else {
+    addOutput(`man: 没有 '${cmd}' 的手册页`, 'error');
+  }
+}
+
+// ═══════════════════════════════════════════
+// Git 模拟
+// ═══════════════════════════════════════════
+
+async function cmdGit(args) {
+  if (args.length === 0) {
+    addOutput('用法: git <subcommand> [args]', 'error');
+    addOutput('子命令: init, add, commit, status, log, diff, branch, checkout', 'dim');
+    return;
+  }
+
+  const subcmd = args[0];
+
+  switch (subcmd) {
+    case 'init':
+      gitInit(); break;
+    case 'add':
+      gitAdd(args.slice(1)); break;
+    case 'commit':
+      await gitCommit(args.slice(1)); break;
+    case 'status':
+      gitStatus(); break;
+    case 'log':
+      gitLog(); break;
+    case 'diff':
+      gitDiff(args.slice(1)); break;
+    case 'branch':
+      gitBranch(args.slice(1)); break;
+    case 'checkout':
+      gitCheckout(args.slice(1)); break;
+    default:
+      addOutput(`git: '${subcmd}' 不是 git 命令`, 'error');
+  }
+}
+
+function gitInit() {
+  if (gitState.initialized) {
+    addOutput('已重新初始化现有 Git 仓库', 'git');
+    return;
+  }
+  gitState.initialized = true;
+  gitState.staged = [];
+  gitState.commits = [];
+  gitState.branch = 'main';
+  gitState.branches = ['main'];
+  addOutput(`已初始化 Git 仓库于 /home/${env.USER}/${currentDir}/.git/`, 'git');
+  addOutput('', 'git');
+  addOutput('提示: 使用 git add <file> 添加文件到暂存区', 'dim');
+  saveState();
+}
+
+function gitAdd(args) {
+  if (!gitState.initialized) {
+    addOutput('fatal: 不是 Git 仓库（未找到 .git 目录）', 'error');
+    return;
+  }
+
+  if (args.length === 0) {
+    addOutput('Nothing specified, nothing added.', 'dim');
+    return;
+  }
+
+  if (args[0] === '.') {
+    // 添加所有文件
+    const dir = resolveDir(currentDir);
+    if (dir && dir.children) {
+      for (const name of Object.keys(dir.children)) {
+        if (!name.startsWith('.') && dir.children[name].type === 'file') {
+          if (!gitState.staged.includes(name)) {
+            gitState.staged.push(name);
+          }
+        }
+      }
+    }
+    addOutput('已添加所有文件到暂存区', 'git');
+  } else {
+    for (const file of args) {
+      const f = getFile(file);
+      if (!f) {
+        addOutput(`fatal: 路径 '${file}' 未匹配任何文件`, 'error');
+        continue;
+      }
+      if (f.type === 'dir') {
+        addOutput(`fatal: '${file}' 是目录 - 不添加目录`, 'error');
+        continue;
+      }
+      if (!gitState.staged.includes(file)) {
+        gitState.staged.push(file);
+      }
+    }
+    addOutput(`已暂存 ${args.length} 个文件`, 'git');
+  }
+  saveState();
+}
+
+async function gitCommit(args) {
+  if (!gitState.initialized) {
+    addOutput('fatal: 不是 Git 仓库', 'error');
+    return;
+  }
+
+  if (gitState.staged.length === 0) {
+    addOutput('nothing to commit, working tree clean', 'dim');
+    return;
+  }
+
+  let message = '';
+  if (args.length >= 2 && args[0] === '-m') {
+    message = args.slice(1).join(' ').replace(/^"|"$/g, '');
+  } else if (args.length >= 1) {
+    message = args.join(' ').replace(/^"|"$/g, '');
+  }
+
+  if (!message) {
+    addOutput('error: 必须提供提交信息 (-m "message")', 'error');
+    return;
+  }
+
+  const commit = {
+    hash: Math.random().toString(16).substring(2, 9),
+    message: message,
+    author: env.USER,
+    date: new Date().toLocaleString('zh-CN'),
+    branch: gitState.branch,
+    files: [...gitState.staged]
+  };
+
+  gitState.commits.push(commit);
+  addOutput(`[${gitState.branch} ${commit.hash}] ${message}`, 'git');
+  addOutput(` ${gitState.staged.length} file(s) changed`, 'result');
+  gitState.staged = [];
+  saveState();
+}
+
+function gitStatus() {
+  if (!gitState.initialized) {
+    addOutput('fatal: 不是 Git 仓库', 'error');
+    return;
+  }
+
+  addOutput(`位于分支 ${gitState.branch}`, 'git');
+
+  const dir = resolveDir(currentDir);
+  const allFiles = dir && dir.children ? Object.keys(dir.children).filter(n => !n.startsWith('.')) : [];
+  const unstaged = allFiles.filter(f => !gitState.staged.includes(f) && dir.children[f].type === 'file');
+
+  if (gitState.staged.length > 0) {
+    addOutput('');
+    addOutput('要提交的更改:', 'info');
+    for (const f of gitState.staged) {
+      addOutputHTML(`  <span style="color:var(--green)">新文件:   ${f}</span>`, 'result');
+    }
+  }
+
+  if (unstaged.length > 0) {
+    addOutput('');
+    addOutput('未跟踪的文件:', 'warning');
+    for (const f of unstaged) {
+      addOutput(`  ${f}`, 'result');
+    }
+    addOutput('');
+    addOutput('使用 "git add <file>..." 包含要提交的内容', 'dim');
+  }
+
+  if (gitState.staged.length === 0 && unstaged.length === 0) {
+    addOutput('nothing to commit, working tree clean', 'dim');
+  }
+}
+
+function gitLog() {
+  if (!gitState.initialized) {
+    addOutput('fatal: 不是 Git 仓库', 'error');
+    return;
+  }
+
+  if (gitState.commits.length === 0) {
+    addOutput('尚无提交记录', 'dim');
+    return;
+  }
+
+  const logs = [...gitState.commits].reverse();
+  for (const commit of logs) {
+    addOutputHTML(`<span style="color:var(--amber);font-weight:700">commit ${commit.hash}</span>`, 'git');
+    addOutput(`Author: ${commit.author} <${commit.author}@sys0.local>`, 'dim');
+    addOutput(`Date:   ${commit.date}`, 'dim');
+    addOutput('');
+    addOutput(`    ${commit.message}`, 'result');
+    addOutput('');
+  }
+}
+
+function gitDiff(args) {
+  if (!gitState.initialized) {
+    addOutput('fatal: 不是 Git 仓库', 'error');
+    return;
+  }
+
+  if (gitState.staged.length === 0) {
+    addOutput('无暂存的更改', 'dim');
+    return;
+  }
+
+  addOutput('diff --git 暂存区更改:', 'git');
+  for (const f of gitState.staged) {
+    const file = getFile(f);
+    if (file) {
+      addOutput(`--- a/${f}`, 'error');
+      addOutput(`+++ b/${f}`, 'ai');
+      const lines = (file.content || '').split('\n');
+      for (const line of lines.slice(0, 5)) {
+        addOutput(`+${line}`, 'result');
+      }
+      if (lines.length > 5) {
+        addOutput(`... (${lines.length - 5} more lines)`, 'dim');
+      }
+    }
+  }
+}
+
+function gitBranch(args) {
+  if (!gitState.initialized) {
+    addOutput('fatal: 不是 Git 仓库', 'error');
+    return;
+  }
+
+  if (args.length === 0) {
+    // 列出分支
+    for (const branch of gitState.branches) {
+      if (branch === gitState.branch) {
+        addOutput(`* ${branch}`, 'git');
+      } else {
+        addOutput(`  ${branch}`, 'result');
+      }
+    }
+  } else {
+    // 创建分支
+    const newBranch = args[0];
+    if (gitState.branches.includes(newBranch)) {
+      addOutput(`fatal: 分支 '${newBranch}' 已存在`, 'error');
+      return;
+    }
+    gitState.branches.push(newBranch);
+    addOutput(`分支 '${newBranch}' 已创建 (基于 ${gitState.branch})`, 'git');
+    saveState();
+  }
+}
+
+function gitCheckout(args) {
+  if (!gitState.initialized) {
+    addOutput('fatal: 不是 Git 仓库', 'error');
+    return;
+  }
+
+  if (args.length === 0) {
+    addOutput('用法: git checkout <branch>', 'error');
+    return;
+  }
+
+  const target = args[0];
+  if (!gitState.branches.includes(target)) {
+    addOutput(`error: 路径规范 '${target}' 未匹配任何已知分支`, 'error');
+    return;
+  }
+
+  if (gitState.staged.length > 0) {
+    addOutput('error: 有未提交的更改，请先提交或暂存', 'warning');
+    return;
+  }
+
+  gitState.branch = target;
+  addOutput(`已切换到分支 '${target}'`, 'git');
+  saveState();
+}
+
+// ═══════════════════════════════════════════
+// 保存/加载命令
+// ═══════════════════════════════════════════
+
+function cmdSave() {
+  saveState();
+  addOutput('[状态已保存到本地存储]', 'system');
+}
+
+function cmdLoad() {
+  if (loadState()) {
+    addOutput('[已从本地存储恢复状态]', 'system');
+    addOutput(`  文件系统: ✓ | 命令历史: ${commandHistory.length} 条 | 别名: ${Object.keys(aliases).length} 个`, 'dim');
+    if (gitState.initialized) {
+      addOutput(`  Git: ${gitState.branch} 分支, ${gitState.commits.length} 次提交`, 'dim');
+    }
+  } else {
+    addOutput('[本地存储中无保存的状态]', 'warning');
+  }
+}
+
+async function cmdReset(args) {
+  if (!args.includes('--confirm')) {
+    addOutput('[警告] 此操作将清除所有本地数据并重置终端到初始状态！', 'warning');
+    addOutput('[警告] 输入 reset --confirm 确认执行', 'warning');
+    return;
+  }
+  clearState();
+  addOutput('[已清除本地存储数据]', 'system');
+  addOutput('正在重置终端...', 'warning');
+  await sleep(500);
+
+  // 重置所有状态到初始值
+  fileSystem = JSON.parse(JSON.stringify(defaultFileSystem));
+  commandHistory = [];
+  historyIndex = -1;
+  currentDir = '~';
+  env = { USER: 'nexus', HOST: 'terminal', HOME: '~', SHELL: '/bin/nexus', LANG: 'zh_CN.UTF-8', TERM: 'xterm-256color', PATH: '/usr/local/bin:/usr/bin:/bin' };
+  aliases = {};
+  gitState = { initialized: false, branch: 'main', commits: [], staged: [], log: [] };
+  editMode = false;
+  editIndicator.classList.remove('active');
+  inputEl = null;
+  aiConversationHistory = [];
+
+  terminal.innerHTML = '';
+  showWelcome();
+  createInputLine();
+  addOutput('[终端已重置为初始状态]', 'system');
+}
+
+// ═══════════════════════════════════════════
+// 帮助
+// ═══════════════════════════════════════════
+
+function cmdHelp() {
+  addOutput('');
+  addOutput('╔══════════════════════════════════════════════════════════╗', 'info');
+  addOutput('║            NEXUS Terminal v4.0 - 命令列表               ║', 'info');
+  addOutput('╚══════════════════════════════════════════════════════════╝', 'info');
+  addOutput('');
+
+  const categories = {
+    '📁 文件操作': [
+      ['ls [path]', '列出目录内容'],
+      ['cd <path>', '切换目录'],
+      ['pwd', '显示当前目录'],
+      ['cat <file>', '查看文件内容'],
+      ['mkdir <name>', '创建目录'],
+      ['touch <name>', '创建文件'],
+      ['rm <name>', '删除文件/目录'],
+      ['tree [path]', '显示目录树'],
+      ['write <f> <text>', '写入文件（覆盖）'],
+      ['append <f> <text>', '追加到文件'],
+      ['edit <file>', '编辑文件（行编辑器）'],
+      ['head <file> [n]', '显示文件前n行'],
+      ['tail <file> [n]', '显示文件后n行'],
+      ['grep <pat> [file]', '搜索文件内容'],
+      ['wc <file>', '统计行/字/字符数'],
+      ['find <name>', '查找文件'],
+      ['diff <f1> <f2>', '比较文件差异'],
+      ['chmod <mode> <file>', '修改文件权限'],
+    ],
+    '🖥️ 系统信息': [
+      ['uname [-a]', '系统信息'],
+      ['uptime', '运行时间'],
+      ['whoami', '当前用户'],
+      ['hostname', '主机名'],
+      ['env', '环境变量'],
+      ['ps', '进程列表'],
+      ['top', '系统资源'],
+      ['neofetch', '系统概况'],
+    ],
+    '🌐 网络': [
+      ['ping <host>', '连通测试'],
+      ['ifconfig', '网络配置'],
+      ['curl <url>', 'HTTP 请求'],
+      ['ssh <host>', 'SSH 连接'],
+    ],
+    '🤖 AI 对话': [
+      ['ai <question>', 'AI 对话模拟'],
+      ['ai -c', '清除对话历史'],
+    ],
+    '📦 Git 版本控制': [
+      ['git init', '初始化仓库'],
+      ['git add <file>', '暂存文件'],
+      ['git commit -m "msg"', '提交更改'],
+      ['git status', '查看状态'],
+      ['git log', '查看提交历史'],
+      ['git diff [file]', '查看差异'],
+      ['git branch [name]', '查看/创建分支'],
+      ['git checkout <br>', '切换分支'],
+    ],
+    '🛠️ 工具': [
+      ['echo <text>', '输出文本（支持 > >> 重定向）'],
+      ['date', '日期时间'],
+      ['calc <expr>', '计算器'],
+      ['history', '命令历史'],
+      ['cowsay <text>', '牛说'],
+      ['fortune', '随机格言'],
+      ['weather [city]', '天气查询'],
+      ['matrix', '矩阵雨效果'],
+      ['alias <n>=<cmd>', '设置命令别名'],
+      ['unalias <name>', '删除别名'],
+      ['man <command>', '命令手册'],
+    ],
+    '⚙️ 终端': [
+      ['clear', '清空终端'],
+      ['color <name>', '切换主题色 (green/cyan/amber/red/purple)'],
+      ['export K=V', '设置变量'],
+      ['save', '保存会话状态'],
+      ['load', '加载会话状态'],
+      ['reset', '清除本地数据并重置终端'],
+      ['reboot', '重启终端'],
+      ['exit', '退出终端'],
+    ],
+    '🔗 管道与重定向': [
+      ['cmd1 | cmd2', '管道：前命令输出作为后命令输入'],
+      ['cmd > file', '输出重定向到文件（覆盖）'],
+      ['cmd >> file', '输出重定向到文件（追加）'],
+      ['ls | grep name', '示例：搜索目录内容'],
+      ['cat file | grep key', '示例：搜索文件内容'],
+      ['env | grep USER', '示例：过滤环境变量'],
+    ]
+  };
+
+  for (const [category, cmds] of Object.entries(categories)) {
+    addOutput(`  ${category}`, 'warning');
+    for (const [name, desc] of cmds) {
+      addOutput(`    ${name.padEnd(24)} ${desc}`, 'result');
+    }
+    addOutput('');
+  }
+}
+
+// ═══════════════════════════════════════════
+// 原有命令（保持兼容）
+// ═══════════════════════════════════════════
+
+function clearTerminal() {
+  terminal.innerHTML = '';
+  inputEl = null;
+  createInputLine();
+}
+
+function cmdEcho(args, stdin = '') {
+  const text = args.length > 0 ? args.join(' ') : stdin;
+  addOutput(text, 'result');
+}
+
+function cmdLs(args) {
+  const targetPath = args[0] || currentDir;
+  const dir = resolveDir(resolvePath(targetPath));
+  if (!dir || dir.type !== 'dir') {
+    addOutput(`ls: 无法访问 '${targetPath}': 不是目录`, 'error');
+    return;
+  }
+
+  const showHidden = args.includes('-a') || args.includes('-la') || args.includes('-al');
+  const showLong = args.includes('-l') || args.includes('-la') || args.includes('-al');
+  const entries = Object.keys(dir.children);
+
+  if (showLong) {
+    addOutput(`总计 ${entries.length}`, 'dim');
+    for (const name of entries) {
+      if (!showHidden && name.startsWith('.')) continue;
+      const entry = dir.children[name];
+      const isDir = entry.type === 'dir';
+      const perms = isDir ? 'drwxr-xr-x' : '-rw-r--r--';
+      const size = isDir ? '4096' : (entry.content?.length || 0).toString().padStart(5);
+      const dateStr = '6月  7 14:30';
+      const colorName = isDir ? `<span style="color:var(--cyan);font-weight:600">${name}/</span>` : name.startsWith('.') ? `<span style="color:var(--green-dark)">${name}</span>` : `<span style="color:var(--green-dim)">${name}</span>`;
+      addOutputHTML(`${perms}  1 ${env.USER.padEnd(8)} ${env.USER.padEnd(8)} ${size} ${dateStr}  ${colorName}`, 'result');
+    }
+  } else {
+    let output = '';
+    for (const name of entries) {
+      if (!showHidden && name.startsWith('.')) continue;
+      const entry = dir.children[name];
+      const isDir = entry.type === 'dir';
+      if (isDir) {
+        output += `<span style="color:var(--cyan);font-weight:600">${name}/</span>  `;
+      } else if (name.startsWith('.')) {
+        output += `<span style="color:var(--green-dark)">${name}</span>  `;
+      } else {
+        output += `<span style="color:var(--green-dim)">${name}</span>  `;
+      }
+    }
+    addOutputHTML(output || '(空目录)', 'result');
+  }
+}
+
+function cmdCd(args) {
+  if (!args[0] || args[0] === '~') {
+    currentDir = '~';
+    return;
+  }
+
+  const targetPath = resolvePath(args[0]);
+  const dir = resolveDir(targetPath);
+
+  if (!dir || dir.type !== 'dir') {
+    addOutput(`cd: 没有此目录: ${args[0]}`, 'error');
+    return;
+  }
+
+  currentDir = targetPath;
+}
+
+function cmdCat(args, stdin = '') {
+  if (!args[0]) {
+    if (stdin) {
+      addOutput(stdin, 'result');
+    } else {
+      addOutput('cat: 缺少文件参数', 'error');
+    }
+    return;
+  }
+
+  const file = getFile(args[0]);
+  if (!file) {
+    addOutput(`cat: ${args[0]}: 文件不存在`, 'error');
+    return;
+  }
+  if (file.type === 'dir') {
+    addOutput(`cat: ${args[0]}: 是一个目录`, 'error');
+    return;
+  }
+  addOutput(file.content || '(空文件)');
+}
+
+function cmdMkdir(args) {
+  if (!args[0]) {
+    addOutput('mkdir: 缺少目录名参数', 'error');
+    return;
+  }
+  const dir = resolveDir(currentDir);
+  if (dir.children[args[0]]) {
+    addOutput(`mkdir: 无法创建 '${args[0]}': 文件已存在`, 'error');
+    return;
+  }
+  dir.children[args[0]] = { type: 'dir', children: {} };
+  addOutput(`目录 '${args[0]}' 已创建`, 'dim');
+  saveState();
+}
+
+function cmdTouch(args) {
+  if (!args[0]) {
+    addOutput('touch: 缺少文件名参数', 'error');
+    return;
+  }
+  const dir = resolveDir(currentDir);
+  if (!dir.children[args[0]]) {
+    dir.children[args[0]] = { type: 'file', content: '' };
+    addOutput(`文件 '${args[0]}' 已创建`, 'dim');
+    saveState();
+  }
+}
+
+function cmdRm(args) {
+  if (!args[0]) {
+    addOutput('rm: 缺少参数', 'error');
+    return;
+  }
+  const dir = resolveDir(currentDir);
+  if (!dir.children[args[0]]) {
+    addOutput(`rm: 无法删除 '${args[0]}': 没有此文件`, 'error');
+    return;
+  }
+  delete dir.children[args[0]];
+  addOutput(`已删除 '${args[0]}'`, 'dim');
+  saveState();
+}
+
+function cmdTree(args) {
+  const targetPath = args[0] || currentDir;
+  const dir = resolveDir(resolvePath(targetPath));
+  if (!dir || dir.type !== 'dir') {
+    addOutput(`tree: '${targetPath}' 不是目录`, 'error');
+    return;
+  }
+
+  addOutput(resolvePath(targetPath === '~' ? '~' : targetPath), 'info');
+  let fileCount = 0, dirCount = 0;
+
+  function drawTree(node, prefix, isLast) {
+    const entries = Object.keys(node.children || {});
+    entries.forEach((name, i) => {
+      const last = i === entries.length - 1;
+      const connector = last ? '└── ' : '├── ';
+      const entry = node.children[name];
+      const isDir = entry.type === 'dir';
+      if (isDir) dirCount++; else fileCount++;
+
+      const colorName = isDir
+        ? `<span style="color:var(--cyan);font-weight:600">${name}/</span>`
+        : `<span style="color:var(--green-dim)">${name}</span>`;
+      addOutputHTML(`${prefix}${connector}${colorName}`, 'result');
+
+      if (isDir) {
+        const newPrefix = prefix + (last ? '    ' : '│   ');
+        drawTree(entry, newPrefix, last);
+      }
+    });
+  }
+
+  drawTree(dir, '', true);
+  addOutput('');
+  addOutput(`${dirCount} 个目录, ${fileCount} 个文件`, 'dim');
+}
+
+function cmdEnv() {
+  for (const [key, val] of Object.entries(env)) {
+    addOutputHTML(`<span style="color:var(--cyan)">${key}</span>=<span style="color:var(--green-dim)">${val}</span>`, 'result');
+  }
+}
+
+function cmdExport(args) {
+  const [key, ...rest] = args[0]?.split('=') || [];
+  if (!key || rest.length === 0) {
+    cmdEnv();
+    return;
+  }
+  env[key] = rest.join('=');
+  addOutput(`${key}=${env[key]}`, 'dim');
+  saveState();
+}
+
+function cmdHistory() {
+  commandHistory.forEach((cmd, i) => {
+    addOutput(`  ${(i + 1).toString().padStart(4)}  ${cmd}`, 'result');
+  });
+}
+
+function cmdUname(args) {
+  if (args.includes('-a')) {
+    addOutput('NEXUS sys0 6.1.0-nexus #1 SMP PREEMPT x86_64 GNU/Linux', 'result');
+  } else {
+    addOutput('NEXUS', 'result');
+  }
+}
+
+const startTime = Date.now();
+
+function cmdUptime() {
+  const elapsed = Date.now() - startTime;
+  const hours = Math.floor(elapsed / 3600000);
+  const mins = Math.floor((elapsed % 3600000) / 60000);
+  const secs = Math.floor((elapsed % 60000) / 1000);
+  addOutput(` ${new Date().toLocaleTimeString('zh-CN')} up ${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}, 1 user, load average: 0.42, 0.38, 0.31`, 'result');
+}
+
+function cmdPs() {
+  const processes = [
+    { pid: 1, tty: '?', time: '00:00:02', cmd: '/sbin/init' },
+    { pid: 42, tty: '?', time: '00:00:01', cmd: '/usr/bin/nexus-core' },
+    { pid: 137, tty: '?', time: '00:00:00', cmd: '/usr/sbin/sshd' },
+    { pid: 256, tty: '?', time: '00:00:01', cmd: '/usr/sbin/nginx' },
+    { pid: 337, tty: 'pts/0', time: '00:00:00', cmd: '-nexus' },
+    { pid: 420, tty: 'pts/0', time: '00:00:00', cmd: 'ps' },
+  ];
+
+  addOutput('  PID TTY          TIME CMD', 'dim');
+  for (const p of processes) {
+    addOutput(`${p.pid.toString().padStart(5)} ${p.tty.padEnd(8)} ${p.time.padStart(10)} ${p.cmd}`, 'result');
+  }
+}
+
+async function cmdTop() {
+  addOutput('NEXUS System Monitor - 按任意键退出', 'info');
+  addOutput('');
+
+  for (let i = 0; i < 3; i++) {
+    const cpu = (Math.random() * 30 + 5).toFixed(1);
+    const mem = (Math.random() * 40 + 30).toFixed(1);
+    const swap = (Math.random() * 5).toFixed(1);
+    addOutput(`[CPU: ${cpu}% | MEM: ${mem}% (${(parseFloat(mem) * 327.68).toFixed(0)}/32768 MB) | SWAP: ${swap}%]`, 'result');
+    await sleep(800);
+  }
+  addOutput('（模拟数据）', 'dim');
+}
+
+async function cmdPing(args) {
+  if (!args[0]) {
+    addOutput('ping: 缺少主机参数', 'error');
+    return;
+  }
+
+  const host = args[0];
+  addOutput(`PING ${host} (${Math.floor(Math.random() * 200 + 10)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}) 56(84) bytes of data.`, 'result');
+
+  for (let i = 0; i < 4; i++) {
+    await sleep(600);
+    const time = (Math.random() * 50 + 5).toFixed(2);
+    addOutput(`64 bytes from ${host}: icmp_seq=${i + 1} ttl=64 time=${time} ms`, 'result');
+  }
+
+  addOutput('');
+  addOutput(`--- ${host} ping 统计 ---`, 'dim');
+  addOutput('4 个包发送, 4 个包接收, 0% 丢包', 'result');
+}
+
+function cmdIfconfig() {
+  addOutput('eth0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500', 'result');
+  addOutput('        inet 10.0.13.37  netmask 255.255.255.0  broadcast 10.0.13.255', 'result');
+  addOutput('        inet6 fe80::a00:27ff:fe4e:66a1  prefixlen 64  scopeid 0x20<link>', 'result');
+  addOutput('        ether 08:00:27:4e:66:a1  txqueuelen 1000  (以太网)', 'result');
+  addOutput('        RX packets 424242  bytes 3735928559 (3.5 GiB)', 'result');
+  addOutput('        TX packets 133713  bytes 9001537 (8.6 MiB)', 'result');
+  addOutput('');
+  addOutput('lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536', 'result');
+  addOutput('        inet 127.0.0.1  netmask 255.0.0.0', 'result');
+  addOutput('        inet6 ::1  prefixlen 128  scopeid 0x10<host>', 'result');
+}
+
+async function cmdCurl(args) {
+  if (!args[0]) {
+    addOutput('curl: 缺少 URL 参数', 'error');
+    return;
+  }
+
+  addOutput(`正在连接 ${args[0]}...`, 'dim');
+  await sleep(800);
+  addOutput('HTTP/1.1 200 OK', 'info');
+  addOutput('Content-Type: application/json', 'dim');
+  addOutput('Server: nginx/1.24.0', 'dim');
+  addOutput('');
+  addOutput('{', 'result');
+  addOutput('  "status": "online",', 'result');
+  addOutput('  "version": "4.0.0",', 'result');
+  addOutput('  "message": "NEXUS Terminal 模拟响应",', 'result');
+  addOutput('  "timestamp": ' + Date.now(), 'result');
+  addOutput('}', 'result');
+}
+
+async function cmdSsh(args) {
+  if (!args[0]) {
+    addOutput('ssh: 缺少目标主机', 'error');
+    return;
+  }
+  addOutput(`正在连接 ${args[0]}...`, 'dim');
+  await sleep(1000);
+  addOutput(`ssh: 连接到 ${args[0]} 端口 22: 连接被拒绝`, 'error');
+  addOutput('（这是模拟终端，无法建立真实 SSH 连接）', 'dim');
+}
+
+function cmdNeofetch() {
+  const uptime = Date.now() - startTime;
+  const mins = Math.floor(uptime / 60000);
+
+  const logo = [
+    '       ╔══════════╗',
+    '       ║  ◉  NEX  ║',
+    '       ║    US    ║',
+    '       ╚══════════╝',
+  ];
+
+  const info = [
+    `<span style="color:var(--cyan);font-weight:700">${env.USER}@${env.HOST}</span>`,
+    '<span style="color:var(--green-dark)">──────────────────</span>',
+    `<span style="color:var(--cyan)">OS</span>: NEXUS Linux 6.1.0 x86_64`,
+    `<span style="color:var(--cyan)">Kernel</span>: 6.1.0-nexus`,
+    `<span style="color:var(--cyan)">Shell</span>: nexus 4.0`,
+    `<span style="color:var(--cyan)">Terminal</span>: NEXUS Terminal v4.0`,
+    `<span style="color:var(--cyan)">CPU</span>: NEXUS Core i9-13900K (24) @ 5.80GHz`,
+    `<span style="color:var(--cyan)">GPU</span>: NEXUS RTX 4090`,
+    `<span style="color:var(--cyan)">Memory</span>: ${Math.floor(Math.random() * 4000 + 8000)} MiB / 32768 MiB`,
+    `<span style="color:var(--cyan)">Uptime</span>: ${mins} mins`,
+    `<span style="color:var(--cyan)">Packages</span>: 1337 (npm)`,
+  ];
+
+  const maxLines = Math.max(logo.length, info.length);
+  for (let i = 0; i < maxLines; i++) {
+    const left = logo[i] || '                     ';
+    const right = info[i] || '';
+    addOutputHTML(`<span style="color:var(--green)">${left}</span>   ${right}`, 'result');
+  }
+
+  addOutput('');
+  const colors = ['var(--red)', 'var(--green)', 'var(--amber)', 'var(--cyan)', 'var(--purple)', 'var(--green-dim)'];
+  let palette = '';
+  colors.forEach(c => {
+    palette += `<span style="background:${c};color:${c}">███</span>`;
+  });
+  addOutputHTML('       ' + palette, 'result');
+}
+
+async function cmdMatrix() {
+  const chars = 'ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍ01234567890ABCDEFZ$@#&';
+  const lines = 12;
+
+  for (let i = 0; i < lines; i++) {
+    let line = '';
+    const len = Math.floor(Math.random() * 40 + 30);
+    for (let j = 0; j < len; j++) {
+      line += chars[Math.floor(Math.random() * chars.length)];
+    }
+    addOutput(line, 'green');
+    await sleep(100);
+  }
+  addOutput('');
+  addOutput('Wake up, Neo...', 'info');
+}
+
+async function cmdWeather(args) {
+  const city = args[0] || '北京';
+  addOutput(`正在查询 ${city} 天气...`, 'dim');
+  await sleep(800);
+
+  const temps = [18, 22, 25, 28, 30, 33, 35, 20, 15, 8];
+  const conditions = ['晴 ☀️', '多云 ⛅', '阴 ☁️', '小雨 🌧️', '雷阵雨 ⛈️', '晴转多云 🌤️'];
+  const temp = temps[Math.floor(Math.random() * temps.length)];
+  const condition = conditions[Math.floor(Math.random() * conditions.length)];
+  const humidity = Math.floor(Math.random() * 60 + 30);
+  const wind = Math.floor(Math.random() * 30 + 5);
+
+  addOutput('');
+  addOutput(`  📍 ${city}`, 'info');
+  addOutput(`  ${condition}`, 'result');
+  addOutput(`  🌡️  温度: ${temp}°C (体感 ${temp + Math.floor(Math.random() * 4 - 2)}°C)`, 'result');
+  addOutput(`  💧 湿度: ${humidity}%`, 'result');
+  addOutput(`  🌬️  风速: ${wind} km/h`, 'result');
+  addOutput('');
+  addOutput('  （模拟数据）', 'dim');
+}
+
+function cmdCalc(args) {
+  if (!args.length) {
+    addOutput('calc: 用法 - calc <表达式>  例: calc 2+3*4', 'error');
+    return;
+  }
+
+  const expr = args.join(' ');
+  try {
+    if (!/^[\d\s+\-*/().%^]+$/.test(expr)) {
+      addOutput('calc: 表达式包含非法字符', 'error');
+      return;
+    }
+    const safeExpr = expr.replace(/\^/g, '**');
+    const result = Function('"use strict"; return (' + safeExpr + ')')();
+    addOutput(`${expr} = ${result}`, 'info');
+  } catch {
+    addOutput('calc: 无效表达式', 'error');
+  }
+}
+
+function cmdCowsay(args) {
+  const text = args.join(' ') || 'Moo!';
+  const border = '─'.repeat(text.length + 2);
+  addOutput(` ┌${border}┐`, 'result');
+  addOutput(` │ ${text} │`, 'result');
+  addOutput(` └${border}┘`, 'result');
+  addOutput('        \\   ^__^', 'result');
+  addOutput('         \\  (oo)\\_______', 'result');
+  addOutput('            (__)\\       )\\/\\', 'result');
+  addOutput('                ||----w |', 'result');
+  addOutput('                ||     ||', 'result');
+}
+
+function cmdFortune() {
+  const fortunes = [
+    '代码写得好，bug 少不了。 —— 程序员格言',
+    '最好的代码是不需要写的代码。',
+    '在计算机面前，你永远不知道 0 和 1 会产生什么奇迹。',
+    '调试是把错误找出来的过程，编程是把错误放进去的过程。',
+    '如果调试是消除 bug 的过程，那编程就是引入 bug 的过程。',
+    '任何你写的代码，超过六个月不看，就像别人写的一样。',
+    '程序员的三大美德：懒惰、急躁、傲慢。 —— Larry Wall',
+    '不要重复你自己。除非你真的想。',
+    '过早优化是万恶之源。 —— Donald Knuth',
+    '这个世界上只有 10 种人：懂二进制的和不懂二进制的。',
+    '代码永远不会有错，错的永远是需求。',
+    '它在我的电脑上是好的啊！',
+  ];
+  addOutput(fortunes[Math.floor(Math.random() * fortunes.length)], 'info');
+}
+
+function cmdColor(args) {
+  const themes = {
+    green: { main: '#00ff9f', dim: '#00cc7f', dark: '#004d30' },
+    cyan: { main: '#00e5ff', dim: '#00b8d4', dark: '#004d5e' },
+    amber: { main: '#ffb300', dim: '#ff8f00', dark: '#5d4000' },
+    red: { main: '#ff3d5a', dim: '#d32f2f', dark: '#5d0015' },
+    purple: { main: '#c77dff', dim: '#9c64ff', dark: '#3a0066' },
+  };
+
+  const theme = args[0]?.toLowerCase();
+  if (!theme || !themes[theme]) {
+    addOutput(`可用主题: ${Object.keys(themes).join(', ')}`, 'info');
+    return;
+  }
+
+  const t = themes[theme];
+  document.documentElement.style.setProperty('--green', t.main);
+  document.documentElement.style.setProperty('--green-dim', t.dim);
+  document.documentElement.style.setProperty('--green-dark', t.dark);
+  addOutput(`主题已切换为 ${theme}`, 'info');
+}
+
+async function cmdReboot() {
+  addOutput('正在重启终端...', 'warning');
+  await sleep(500);
+
+  document.querySelector('.terminal-wrapper').classList.add('glitch');
+  await sleep(300);
+  document.querySelector('.terminal-wrapper').classList.remove('glitch');
+
+  terminal.innerHTML = '';
+  commandHistory = [];
+  historyIndex = -1;
+  currentDir = '~';
+  editMode = false;
+  editIndicator.classList.remove('active');
+  inputEl = null;
+
+  const newBoot = document.createElement('div');
+  newBoot.id = 'boot-screen';
+  newBoot.innerHTML = `
+    <div class="boot-logo">NEXUS</div>
+    <div class="boot-text" id="boot-text"></div>
+    <div class="progress-bar"><div class="fill" id="boot-progress"></div></div>
+  `;
+  terminal.appendChild(newBoot);
+
+  await sleep(300);
+  const newBootText = document.getElementById('boot-text');
+  const newBootProgress = document.getElementById('boot-progress');
+  const newBootScreen = document.getElementById('boot-screen');
+
+  for (let i = 0; i < bootSequence.length; i++) {
+    const step = bootSequence[i];
+    const line = document.createElement('div');
+    line.className = 'line';
+    if (step.text.includes('✓')) line.style.color = 'var(--green-dim)';
+    else if (step.text.includes('>>>')) { line.style.color = 'var(--cyan)'; line.style.fontWeight = '600'; }
+    else if (step.text.includes('[SEC]')) line.style.color = 'var(--amber)';
+    line.textContent = step.text;
+    newBootText.appendChild(line);
+    await sleep(50);
+    line.classList.add('visible');
+    newBootProgress.style.width = `${((i + 1) / bootSequence.length) * 100}%`;
+    if (step.delay) await sleep(step.delay);
+  }
+
+  await sleep(400);
+  newBootScreen.style.transition = 'opacity 0.5s ease';
+  newBootScreen.style.opacity = '0';
+  await sleep(500);
+  newBootScreen.remove();
+
+  try {
+    showWelcome();
+  } catch (e) {
+    console.warn('showWelcome 异常:', e);
+  }
+
+  try {
+    createInputLine();
+  } catch (e) {
+    console.warn('createInputLine 异常:', e);
+  }
+}
+
+function cmdExit() {
+  addOutput('logout', 'dim');
+  addOutput('连接已关闭。', 'warning');
+  addOutput('');
+  addOutput('（这是模拟终端，无法真正退出。输入任意命令继续使用）', 'dim');
+}
+
+// ═══════════════════════════════════════════
+// Matrix 背景
+// ═══════════════════════════════════════════
+
+function initMatrixBg() {
+  const canvas = document.getElementById('matrix-bg');
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%^&*';
+  const fontSize = 14;
+  const columns = Math.floor(canvas.width / fontSize);
+  const drops = Array(columns).fill(1);
+
+  function draw() {
+    ctx.fillStyle = 'rgba(10, 14, 20, 0.05)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#00ff9f';
+    ctx.font = fontSize + 'px monospace';
+
+    for (let i = 0; i < drops.length; i++) {
+      const text = chars[Math.floor(Math.random() * chars.length)];
+      ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+      if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+        drops[i] = 0;
+      }
+      drops[i]++;
+    }
+  }
+
+  setInterval(draw, 50);
+
+  window.addEventListener('resize', () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  });
+}
+
+// ═══════════════════════════════════════════
+// 全局事件
+// ═══════════════════════════════════════════
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.autocomplete')) {
+    hideAutocomplete();
+  }
+  if (inputEl && !e.target.closest('.autocomplete')) {
+    inputEl.focus();
+  }
+});
+
+// 终端区域点击时自动聚焦输入框
+document.querySelector('.terminal-body').addEventListener('click', (e) => {
+  if (!e.target.closest('input') && !e.target.closest('.autocomplete') && inputEl) {
+    inputEl.focus();
+  }
+});
+
+// 启动
+initMatrixBg();
+boot();
+</script>
+</body>
+</html>
